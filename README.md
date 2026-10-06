@@ -341,6 +341,27 @@ npx -y spacesheep@latest stream lab-work/gcp-1 --run "node collect.js" \
 A page shows a stream once it declares it: `<meta name="ss-streams" content="lab-work/gcp-1">`, then
 `ss.stream("lab-work/gcp-1").draw((last, history, status) => …)`.
 
+## spacesheep.dev at localhost (the mirror)
+
+`spacesheep mirror` is spacesheep.dev itself at `http://localhost:4280`, signed in as you: the
+dashboard, every space, comments, the Co-shepherd. `spacesheep.dev/@you/plan` is
+`http://localhost:4280/@you/plan`. Everything comes from spacesheep's cloud as you open it; nothing
+is stored on this machine.
+
+```bash
+npx -y spacesheep@latest mirror on      # in the background, started again at login
+open http://localhost:4280/
+```
+
+- **Why:** spacesheep.dev refuses to be framed, and VS Code's Simple Browser is a frame. In VS Code:
+  `⌘⇧P` → **Simple Browser: Show** → `http://localhost:4280/@you/plan`.
+- **Sign-in:** the key this CLI holds is traded for a 12-hour spacesheep.dev session that stays in the
+  mirror's process; the browser never holds it. Anything that asks for a recent sign-in still sends you
+  to spacesheep.dev.
+- **Safety:** it listens on 127.0.0.1 only, answers only `localhost` hosts, and refuses any write or
+  socket that doesn't come from one of its own pages.
+- `--port 4280` sets where it listens. `mirror status` says where it runs; `mirror off` stops it.
+
 ## Commands
 
 | Command | What it does |

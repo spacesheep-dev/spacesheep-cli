@@ -79,6 +79,11 @@ const HELP = `
     spacesheep stream <name> ... --on name=cmd [--on …] [--on-dir DIR]
                                            run a page's button presses here: only what is listed runs
     spacesheep streams [prefix]            your streams: rate, who is watching, whether a machine listens
+    spacesheep mirror [--port 4280]        spacesheep.dev itself at http://localhost:4280, signed in as you:
+                                           the dashboard, every space, comments. spacesheep.dev/@you/space is
+                                           localhost:4280/@you/space, and it can be framed (VS Code's Simple Browser)
+    spacesheep mirror on [--port 4280]     keep it running in the background (launchd / systemd)
+    spacesheep mirror off | status         stop it; where it runs
     spacesheep keys create [--scope stream|sessions|full] [--name NAME]
                                            mint a key with the one this machine holds; prints only the key, so
                                            \`spacesheep keys create --scope stream --name lab-1 | ssh lab-1 spacesheep keys save\`
@@ -207,6 +212,8 @@ const commands = {
     log(`\n  ✓ ${r.is_update ? "Updated" : "Created"} ${r.url}`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
+    const local = require("../lib/mirror").localNote(r.url);
+    if (local) log(`  ↓ ${local}`);
     const nudge = require("../lib/talk").deployNudge(r);
     if (nudge) log("\n" + nudge);
     out(r.url);
@@ -302,6 +309,15 @@ const commands = {
     return require("../lib/stream").run(opts, cfg, log);
   },
   async streams(opts) { return require("../lib/stream").list(opts, cfg, out); },
+  async mirror(opts) {
+    const mirror = require("../lib/mirror");
+    const sub = opts._[0];
+    if (sub === "on") return mirror.on(opts, log);
+    if (sub === "off") return mirror.off(opts, log);
+    if (sub === "status") return mirror.status(opts, out);
+    if (sub === "run" || !sub) return mirror.run(opts, log);
+    throw new Error("usage: spacesheep mirror [--dir DIR] [--port N] [--every 15s] [--recent N] | on | off | status");
+  },
   async update() { return selfUpdate(log); },
   async memory(opts) {
     const mem = require("../lib/memory");
