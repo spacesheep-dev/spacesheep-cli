@@ -39,7 +39,7 @@ const HELP = `
     spacesheep logout                      forget the stored key
     spacesheep whoami                      who the stored key belongs to
     spacesheep deploy [dir|file] [opts]    publish a folder (needs index.html) or one .html file
-    spacesheep list                        your spaces
+    spacesheep list [--all] [--json]        your spaces (table: one page; JSON: all pages)
     spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
@@ -109,6 +109,15 @@ const HELP = `
     -m, --message <text>     version name shown in the space's history
     --json                   print the server's JSON result
 
+  list options
+    --all                    fetch all pages for the table (implicit with --json)
+    --json                   print one JSON array of all spaces by default
+    --limit <N>              rows per request, 1–200 (default 50; 200 with --all or --json)
+    --offset <N>             skip N spaces, then list from there (default 0)
+                             --limit is a page size, not a total cap with --all or --json
+                             table omissions are reported on stderr; stdout contains only rows/JSON
+                             at most 1,000 list_spaces requests; errors print no partial list
+
   Auth
     SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
     SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
@@ -142,7 +151,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
+const FLAGS = new Set(["--all", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -238,10 +247,13 @@ const commands = {
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `url=${r.url}\nuuid=${r.uuid}\nsha=${r.sha}\n`);
   },
   async list(opts) {
-    const r = await client().call("list_spaces");
-    const rows = Array.isArray(r) ? r : r.spaces || [];
+    const c = client();
+    const { rows, total, hasMore } = await require("../lib/list-spaces").listSpaces(opts, args => c.call("list_spaces", args));
     if (opts.json) return out(rows);
     for (const s of rows) out(`${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`);
+    // This is data completeness, so even SPACESHEEP_QUIET must not hide it.
+    if (total > rows.length || hasMore)
+      console.error(`showing ${rows.length}${total === undefined ? " spaces" : ` of ${total}`} — spacesheep list --all for the rest`);
   },
   async read(opts) {
     const [space, file] = opts._;

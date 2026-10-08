@@ -372,7 +372,7 @@ open http://localhost:4280/
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
 | `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). |
-| `spacesheep list` | Your spaces |
+| `spacesheep list` | One page of your spaces; `--all` or `--json` fetches all pages. `--limit N` sets page size (1–200); `--offset N` skips N spaces. |
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
@@ -391,6 +391,38 @@ open http://localhost:4280/
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
+
+### List every space
+
+```bash
+spacesheep list                         # first 50; a notice on stderr names rows shown and total
+spacesheep list --all                   # every space, in the same table format
+spacesheep list --json                  # every space, as one JSON array for scripts
+spacesheep list --limit 20 --offset 40   # one table page, skipping the first 40
+spacesheep list --json --limit 100       # every space, fetched 100 at a time
+```
+
+`--limit` is the number of rows requested per page (1–200), not a total output cap
+with `--all` or `--json`. It defaults to 50 for a single table page and 200 for
+`--all` or `--json`. `--offset` is a non-negative integer (default 0); with
+`--all` or `--json`, it returns every remaining space from that offset onward.
+Rows remain in the server's order, most recently updated first. Live updates can
+move rows between pages; this is not a snapshot.
+
+Table output stays on stdout. When the table omits spaces, stderr says, for
+example, `showing 50 of 469 — spacesheep list --all for the rest`, even with
+`SPACESHEEP_QUIET=1`. If a server supplies a cursor but no total, the notice names
+the number shown without inventing a total. JSON stdout contains only one array,
+with no truncation notice. Errors go to stderr and exit nonzero; no partial list
+is printed if a later request fails.
+
+Paging follows `next_offset` until it is null or absent, with at most **1,000
+list_spaces requests** per invocation. A repeated/backward/invalid cursor, an
+empty page with another cursor, or exceeding that bound fails instead of
+silently returning an incomplete list. Older servers returning a bare array or
+omitting pagination metadata are read once. If a supplied `total` proves more
+rows remain but there is no cursor, `--all`/`--json` fail; without that metadata,
+the CLI can only return what the older server supplies.
 
 ## Machines that can't open a browser
 
