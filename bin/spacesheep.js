@@ -23,7 +23,7 @@ const pkg = require("../package.json");
 const cfg = require("../lib/config");
 const { McpClient } = require("../lib/mcp");
 const os = require("os");
-const { deviceLogin, connectWithKey } = require("../lib/login");
+const { deviceLogin, connectWithKey, redeemCode, agentClient } = require("../lib/login");
 const { deploy } = require("../lib/deploy");
 const { updateNotice, selfUpdate } = require("../lib/update");
 
@@ -32,6 +32,8 @@ const HELP = `
 
   Usage
     spacesheep login                       sign in through the browser (stores a key in ~/.config/spacesheep)
+    spacesheep login --code ssc_…          sign in with the one-time code from the prompt on spacesheep.dev/start
+                                           (no browser: you approved it by copying it while signed in)
     spacesheep connect <ss_key> [name]     sign in with no browser: mints this machine its own key, named
                                            after its hostname (or <name>); the pasted key is never stored
     spacesheep logout                      forget the stored key
@@ -170,6 +172,22 @@ function client() {
 
 const commands = {
   async login(opts) {
+    // `--code ssc_…`: the one-time code in the personal prompt on spacesheep.dev/start.
+    // Already approved, so no browser: the code becomes a key named after this machine.
+    if (opts.code !== undefined) {
+      if (opts.scope) throw new Error("--code signs in with a full key; --scope doesn't apply to it");
+      const name = (opts.name || os.hostname().split(".")[0] || "computer").slice(0, 60);
+      const { key, username, name: saved } = await redeemCode(cfg.appOrigin(), opts.code, name, log, agentClient(process.env));
+      cfg.writeConfig({
+        ...cfg.readConfig(), key, username, machine: saved,
+        origin: process.env.SPACESHEEP_ORIGIN || undefined,
+        appOrigin: process.env.SPACESHEEP_APP_ORIGIN || undefined,
+      });
+      await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH" || e.code === "ENET") throw e; });
+      log(`\n  ✓ Signed in${username ? ` as @${username}` : ""} on "${saved}". Key saved to ${cfg.configPath()}`);
+      log(`  Publish with: npx -y spacesheep@latest deploy <folder or .html file>\n`);
+      return;
+    }
     // `--scope stream`: a key that can only push to your streams — the kind to leave on a lab box.
     const scope = opts.scope === "stream" || opts.scope === "streams" ? "stream" : undefined;
     if (opts.scope && !scope) throw new Error(`--scope takes "stream" (a streams-only key); without it the key is a full one`);

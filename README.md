@@ -367,6 +367,7 @@ open http://localhost:4280/
 | Command | What it does |
 |---|---|
 | `spacesheep login` | Browser sign-in; stores a key in `~/.config/spacesheep/config.json` |
+| `spacesheep login --code ssc_…` | Sign in with the one-time code in the prompt at [spacesheep.dev/start](https://spacesheep.dev/start): no browser, because copying it while signed in was the approval. Works once, for 30 minutes; mints this machine its own key, named after its hostname (or `--name`) |
 | `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
