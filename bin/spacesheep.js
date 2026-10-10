@@ -82,7 +82,7 @@ const HELP = `
                                            run a page's button presses here: only what is listed runs
     spacesheep stream <name> --camera | --screen | --rtsp <url> | --file <video> | --test
                                            film into a camera stream (ffmpeg): pages show it with
-                                           <video data-ss-stream="<name>">, one picture a second;
+                                           <video data-ss-stream="<name>">, 3 pictures a second;
                                            --space <page link> films the camera of a page you can edit,
                                            --device <id> picks the camera or screen
     spacesheep streams [prefix]            your streams: rate, who is watching, whether a machine listens

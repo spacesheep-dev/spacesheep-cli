@@ -26,9 +26,9 @@ test("ffmpeg input per platform", () => {
   assert.ok(inputArgs("test", {}, "darwin", null).includes("lavfi"));
 });
 
-test("one JPEG a second, at most 960 wide", () => {
-  const a = outputArgs(6);
-  assert.ok(a.includes("fps=1,scale='min(960,iw)':-2"));
+test("three JPEGs a second, at most 960 wide", () => {
+  const a = outputArgs(4);
+  assert.ok(a.includes("fps=3,scale='min(960,iw)':-2"));
   assert.ok(a.includes("mjpeg") && a.includes("pipe:1"));
 });
 
