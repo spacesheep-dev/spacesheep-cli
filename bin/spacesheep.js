@@ -80,6 +80,11 @@ const HELP = `
                                            run a command on an interval and push its output
     spacesheep stream <name> ... --on name=cmd [--on …] [--on-dir DIR]
                                            run a page's button presses here: only what is listed runs
+    spacesheep stream <name> --camera | --screen | --rtsp <url> | --file <video> | --test
+                                           film into a camera stream (ffmpeg): pages show it with
+                                           <video data-ss-stream="<name>">, one picture a second;
+                                           --space <page link> films the camera of a page you can edit,
+                                           --device <id> picks the camera or screen
     spacesheep streams [prefix]            your streams: rate, who is watching, whether a machine listens
     spacesheep mirror [--port 4280]        spacesheep.dev itself at http://localhost:4280, signed in as you:
                                            the dashboard, every space, comments. spacesheep.dev/@you/space is
@@ -142,7 +147,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
+const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -322,6 +327,7 @@ const commands = {
     throw new Error("usage: spacesheep keys create [--scope stream|sessions|full] [--name NAME] [--json] | keys save   (reads a key from stdin)");
   },
   async stream(opts) {
+    if (require("../lib/video").sourceOf(opts)) return require("../lib/video").run(opts, cfg, log);
     if (opts.removeService) return require("../lib/stream-service").remove(opts, log);
     if (opts.service) return require("../lib/stream-service").install(opts, log);
     return require("../lib/stream").run(opts, cfg, log);
