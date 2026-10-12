@@ -43,6 +43,13 @@ const HELP = `
     spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
+    spacesheep delete <space> [--yes]      delete one of your spaces and every version of it (can't be undone);
+                                           takes a uuid, a link or one of your slugs, and unpins this folder
+    spacesheep tools [name]                every tool the server has, or one tool's arguments
+    spacesheep call <tool> [key=value | key:=json ...]
+                                           run any of them: \`call screenshot uuid=<space> width:=390\`;
+                                           or one JSON object, or \`-\` to read it from stdin. Pictures it
+                                           returns are written to files (-o dir) and their paths printed
     spacesheep feedback <message> --client-id <id> [--category bug] [--tag deploy ...] [--attach file]
                                            send feedback to the team; reuse the ID on retries.
                                            --attach sends a text file (a log, a transcript tail) beside it
@@ -132,6 +139,7 @@ function parse(argv) {
     if (a === "--") { opts.cmd = argv.slice(i + 1); break; }
     if (a === "--json") opts.json = true;
     else if (a === "-h" || a === "--help") opts.help = true;
+    else if (a === "-y" || a === "--yes") opts.yes = true;
     else if (a === "-v" || a === "--version") opts.version = true;
     else if (a === "-o" || a === "--out") opts.out = take();
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
@@ -280,6 +288,51 @@ const commands = {
     if (opts.visibility) args.visibility = opts.visibility;
     const r = await client().call("share_space", args);
     out(r);
+  },
+  async delete(opts) {
+    const space = opts._[0];
+    if (!space) throw new Error("usage: spacesheep delete <space> [--yes]   (a uuid, a spacesheep.dev link, or one of your slugs)");
+    // A person at a terminal confirms; an agent's shell is not a terminal, and it was
+    // asked to delete by the person it works for.
+    if (process.stdin.isTTY && process.stdout.isTTY && !opts.yes) {
+      const rl = require("readline").createInterface({ input: process.stdin, output: process.stderr });
+      const answer = await new Promise((r) => rl.question(`  Delete ${space} and every version of it? This can't be undone. [y/N] `, r));
+      rl.close();
+      if (!/^y(es)?$/i.test(answer.trim())) return log("  Nothing deleted.");
+    }
+    const t = require("../lib/tools");
+    const r = await t.deleteSpace(client(), space);
+    const unpinned = t.unpin(process.cwd(), r.uuid);
+    if (opts.json) return out({ deleted: r.uuid, message: r.message, unpinned });
+    log(`  ✓ ${r.message}`);
+    if (unpinned) log("  This folder's .spacesheep.json no longer points at it; the next deploy here makes a new space.");
+  },
+  async tools(opts) {
+    const t = require("../lib/tools");
+    const all = await client().listTools();
+    const name = opts._[0];
+    if (name) {
+      const tool = all.find((x) => x.name === name);
+      if (!tool) throw new Error(`no tool named ${name} — \`spacesheep tools\` lists them`);
+      return out(opts.json ? tool : t.toolHelp(tool));
+    }
+    if (opts.json) return out(all);
+    for (const tool of all.slice().sort((a, b) => a.name.localeCompare(b.name))) out(t.toolLine(tool));
+    log(`\n  ${all.length} tools. \`spacesheep tools <name>\` shows one's arguments; \`spacesheep call <name> …\` runs it.`);
+  },
+  async call(opts) {
+    const t = require("../lib/tools");
+    const [name, ...words] = opts._;
+    if (!name) throw new Error("usage: spacesheep call <tool> [key=value | key:=json ...] | '<json>' | -   (`spacesheep tools` lists them)");
+    const args = words.length === 1 && words[0] === "-" ? t.callArgs([await t.readAll()]) : t.callArgs(words);
+    let result;
+    try { result = await client().callRaw(name, args); }
+    catch (e) { if (/not found|unknown tool/i.test(e.message)) e.message += " — `spacesheep tools` lists the tools"; throw e; }
+    const shown = t.render(name, result, opts);
+    if (opts.json) out(shown.json);
+    else if (result.isError) { const e = new Error(shown.text || `${name} failed`); e.code = "ETOOL"; throw e; }
+    else if (shown.text) out(shown.text);
+    if (result.isError) process.exitCode = 1;
   },
   async feedback(opts) {
     const args = require("../lib/inspection").feedbackArgs(opts);

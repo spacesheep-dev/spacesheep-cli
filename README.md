@@ -376,6 +376,9 @@ open http://localhost:4280/
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
+| `spacesheep delete <space> [--yes]` | Delete one of your spaces and every version of it. It can't be undone, so a terminal asks first (`--yes` skips the question; an agent's shell isn't a terminal and isn't asked). A folder whose `.spacesheep.json` pointed at it is unpinned, so its next deploy makes a new space |
+| `spacesheep tools [name]` | Every tool the server offers your key (what it does: reads, changes or destructive), or one tool's arguments |
+| `spacesheep call <tool> [key=value \| key:=json ...]` | Run any tool: `key=value` passes a string, `key:=json` a number, boolean, list or object; or pass one JSON object, or `-` to read it from stdin. Text is printed (JSON pretty-printed); pictures are written to files (`-o dir`, else a temp folder) and their paths printed — `spacesheep call screenshot uuid=<space> width:=390` is the phone check. `--json` prints the whole result |
 | `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir`, `--codex-chain` |
 | `spacesheep feedback <message> --client-id <id>` | Submit feedback; optional `--category`, repeated `--tag`, `--metadata` JSON; returns a JSON receipt |
 | `spacesheep sessions list` | Query your tracked sessions with filters and pagination; JSON output |
@@ -390,7 +393,7 @@ open http://localhost:4280/
 | `spacesheep streams [prefix]` | Your streams: rate, watchers, whether a machine listens |
 | `spacesheep update` | Install the newest version globally |
 
-`<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
+`<space>` is a UUID or a `spacesheep.dev/@user/slug` URL (`delete` also takes one of your own slugs).
 
 ## Machines that can't open a browser
 
@@ -425,7 +428,8 @@ The CLI is an ordinary [MCP](https://modelcontextprotocol.io) client of the same
 remote server that the Claude, ChatGPT and Gemini connectors use
 (`https://mcp.spacesheep.dev/mcp`). It has no dependencies and no server-side code
 of its own: `deploy` stages each file with a PUT, then calls the `deploy` tool with
-the staged hashes. Anything the tools can do, the CLI can do.
+the staged hashes. Anything the tools can do, the CLI can do: the commands above
+wrap the everyday ones, and `spacesheep call` runs any other tool by name.
 
 ## Requirements
 
