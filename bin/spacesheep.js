@@ -38,6 +38,12 @@ const HELP = `
                                            after its hostname (or <name>); the pasted key is never stored
     spacesheep logout                      forget the stored key
     spacesheep whoami                      who the stored key belongs to
+    spacesheep live-link <title> [opts]    the link first: publishes a "Spacesheep is working on it" page and
+                                           prints its URL in about a second, before the page exists — send it,
+                                           then work. --emoji --description --status --visibility v --email a@b.c
+    spacesheep live-status <space> <words> [--stopped]
+                                           the step you're on, shown on that page as you work; finish with
+                                           \`deploy <dir|file> --space <space>\`, which replaces it at the same link
     spacesheep deploy [dir|file] [opts]    publish a folder (needs index.html) or one .html file
     spacesheep list                        your spaces
     spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
@@ -155,7 +161,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
+const FLAGS = new Set(["--stopped", "--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -236,6 +242,24 @@ const commands = {
     const c = cfg.readConfig();
     if (opts.json) return out({ username: c.username || null, key_prefix: k.key.slice(0, 8), source: k.source, machine: c.machine || null });
     out(k.source === "env" ? `key from SPACESHEEP_KEY (${k.key.slice(0, 8)}…)` : `@${c.username || "?"}${c.machine ? ` on "${c.machine}"` : ""} (${k.key.slice(0, 8)}…, ${cfg.configPath()})`);
+  },
+  // The link first: the URL alone goes to stdout, so `url=$(spacesheep live-link …)`
+  // works; how to say each step and how to finish go to stderr beside it.
+  async "live-link"(opts) {
+    const live = require("../lib/live");
+    const args = live.liveLinkArgs(opts);
+    // Stamped like a deploy, so the version history and Talk know what made it.
+    const session = await require("../lib/session").collectSession(process.cwd()).catch(() => null);
+    if (session) args.session = session;
+    const r = live.liveLinkResult(await client().call("live_link", args));
+    if (opts.json) return out(r);
+    for (const line of live.liveLinkLines(r)) log(line);
+    out(r.url);
+  },
+  async "live-status"(opts) {
+    const r = await client().call("live_push", require("../lib/live").liveStatusArgs(opts));
+    if (opts.json) return out(r);
+    out(typeof r === "string" ? r : r.note || "ok");
   },
   async deploy(opts) {
     const r = await deploy(client(), opts._[0], { ...opts, via: process.env.GITHUB_ACTIONS ? "GitHub Actions" : "CLI" }, log);

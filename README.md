@@ -17,6 +17,22 @@ to in the dashboard. If the folder now holds a different page (its `<title>` cha
 `deploy` stops rather than replace the old one: pass `--space <url>` to update it
 anyway, or `--new` to publish the page as a new space. GitHub Actions skips that check.
 
+## The link first
+
+When someone is waiting for a page, give them its link before the page exists:
+
+```bash
+spacesheep live-link "Q3 pricing review" --emoji 📊        # prints the URL in about a second
+spacesheep live-status <uuid> "Reading the pricing pages"   # each step shows on that page
+spacesheep deploy ./report --space <uuid>                   # the finished page, at the same link
+```
+
+The link opens a "Spacesheep is working on it" page that shows each step as you say
+it, and the finished page replaces it for everyone holding the link. It is the
+`live_link` the `/sheep` skill makes its first call, for an agent that reaches
+spacesheep only through this CLI: a headless or Remote Control session whose MCP
+connection can't sign in, a Claude Code setup without the plugin, Codex, a script.
+
 ## Deploy automatically from GitHub Actions
 
 1. Create an API key at <https://spacesheep.dev/settings> and add it to the repo as
@@ -371,6 +387,8 @@ open http://localhost:4280/
 | `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
+| `spacesheep live-link <title>` | The link first: publishes a "Spacesheep is working on it" page and prints its URL in about a second, before the page exists (the server's `live_link`). Options: `--emoji`, `--description`, `--status` (the first step), `--visibility`, `--email`, `--slug`, `--org`, `--json`. With no `--visibility` the account's own default for new pages applies |
+| `spacesheep live-status <space> <words> [--stopped]` | The step you're on, shown on the working page to whoever has it open (`""` takes it down; `--stopped` says the work stopped, and the words say why). Finish with `spacesheep deploy <dir\|file> --space <space>`: the finished page replaces the working one at the same link |
 | `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). |
 | `spacesheep list` | Your spaces |
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
