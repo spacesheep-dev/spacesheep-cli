@@ -148,9 +148,9 @@ test("skill: added where a harness reads skills, the command copy updated in pla
   fs.writeFileSync(path.join(home, ".claude", "commands", "sheep.md"), "<!-- spacesheep-skill-version: 1.0.0 -->\nold");
   fs.mkdirSync(path.join(home, ".codex", "skills"), { recursive: true });
   fs.mkdirSync(path.join(home, ".claude-work", "plugins"), { recursive: true });
-  fs.writeFileSync(path.join(home, ".claude-work", "settings.json"), "{}");
   fs.writeFileSync(path.join(home, ".claude-work", ".claude.json"), "{}");
-  fs.writeFileSync(path.join(home, ".claude-work", "plugins", "installed_plugins.json"), '{"plugins":{"spacesheep@spacesheep":[]}}');
+  fs.writeFileSync(path.join(home, ".claude-work", "settings.json"), '{"enabledPlugins":{"spacesheep@spacesheep":true}}');
+  fs.writeFileSync(path.join(home, ".claude-work", "plugins", "installed_plugins.json"), '{"plugins":{"spacesheep@spacesheep":[{"scope":"user","version":"1.0.0"}]}}');
   fs.mkdirSync(path.join(home, ".cursor", "skills", "sheep"), { recursive: true });
   fs.writeFileSync(path.join(home, ".cursor", "skills", "sheep", "SKILL.md"), "someone else's sheep");
   const skill = "<!-- spacesheep-skill-version: 2.0.0 -->\n# Deploy";

@@ -51,12 +51,15 @@ const HELP = `
                                            (no browser: you approved it by copying it while signed in)
     spacesheep connect <ss_key> [name]     sign in with no browser: mints this machine its own key, named
                                            after its hostname (or <name>); the pasted key is never stored
-    spacesheep install [--only codex,cursor] [--skip work] [--no-skill] [--dry-run]
+    spacesheep install [--only codex,cursor] [--except <id>] [--no-skill] [--dry-run]
                                            connect EVERY coding harness on this machine at once: signs the
                                            machine in (once), points Claude Code, Codex, Gemini CLI,
                                            Antigravity, Cursor, Windsurf, VS Code and opencode at
                                            \`spacesheep mcp\`, and puts the /sheep skill where each reads skills.
                                            Takes --code ssc_… or --key ss_… to sign in with no browser.
+                                           --only / --except apply to MCP entries AND skills; comma-separated
+                                           ids, e.g. --only claude-code --except claude-code:.claude-placeholder
+                                           An enabled spacesheep plugin keeps its own connection; bridge skipped.
                                            --skip leaves some out: an agent (cursor) or one Claude home
                                            by its folder (.claude-work, or just work)
     spacesheep install --ssh host1,host2   the same on other machines, from here. A machine that is already
