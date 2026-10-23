@@ -108,3 +108,36 @@ test("machineOn reads machine.json's presence in the CLI's config dir, or a pair
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// --- talk reply --to: the answer names the message it answers ------------------------
+// With two messages waiting (a comment on each of two pages), a reply that names none
+// is answered against the newest, and lands under the other page's comment.
+const { run, replyTo } = require("../lib/talk");
+
+test("--to is the id on the message's listen line, a positive whole number", () => {
+  assert.equal(replyTo({}), null);
+  assert.equal(replyTo({ to: "19" }), 19);
+  assert.equal(replyTo({ to: " 19 " }), 19);
+  for (const bad of ["0", "-3", "1.5", "19x", "abc", "", "1e3", "0x13"]) {
+    assert.throws(() => replyTo({ to: bad }), /--to takes the id/, `rejects ${JSON.stringify(bad)}`);
+  }
+});
+
+test("talk reply sends message_id with --to, and nothing extra without it", async () => {
+  const calls = [];
+  const call = async (name, args) => { calls.push([name, args]); return { ok: true, id: 1 }; };
+  const out = () => {};
+  await run({ _: ["reply", "Q3, now", "in the heading."], session: SID, to: "19" }, call, out, () => {});
+  await run({ _: ["reply", "done"], session: SID }, call, out, () => {});
+  assert.deepEqual(calls, [
+    ["talk_reply", { session_id: SID, text: "Q3, now in the heading.", message_id: 19 }],
+    ["talk_reply", { session_id: SID, text: "done" }],
+  ]);
+  await assert.rejects(run({ _: ["reply", "x"], session: SID, to: "abc" }, call, out, () => {}), /--to takes the id/);
+  assert.equal(calls.length, 2); // a bad id never reaches the server
+});
+
+test("the start nudge tells the session to name the message it answers", () => {
+  const n = startNudge({ session_id: SID, source: "startup" }, { talk: true }, false);
+  assert.ok(n.includes(`--session ${SID} --to <the line's id> "<text>"`));
+});

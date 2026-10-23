@@ -215,8 +215,12 @@ start itself:
 ```bash
 spacesheep talk on               # your account's switch, and this machine's opt-in
 spacesheep talk listen --once    # waits for the next message, prints it, exits (run it in the background)
-spacesheep talk reply "done"     # answer in the Session tab
+spacesheep talk reply --to 19 "done"   # answer message 19 in the Session tab
 ```
+
+Each message the listener prints carries its `id`. Pass it with `--to`, so the answer
+goes to that message: with several waiting (a comment on each of two pages), a reply
+that names none answers the newest, and lands under the wrong comment.
 
 Sessions are told they can listen in two places. After `spacesheep deploy`, when
 Talk is on and the session isn't listening yet. And, with `spacesheep sessions

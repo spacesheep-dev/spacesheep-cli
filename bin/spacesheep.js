@@ -87,8 +87,9 @@ const HELP = `
                                            wait for those messages here, one JSON line each
                                            (--session defaults to $CLAUDE_CODE_SESSION_ID);
                                            sessionpipe replaces it — see machine on
-    spacesheep talk reply <text> [--session ID]
-                                           answer in the page's Session tab
+    spacesheep talk reply <text> [--session ID] [--to MESSAGE_ID]
+                                           answer in the page's Session tab; --to names the
+                                           message it answers (the id on its listen line)
     spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME]
                                            let spacesheep.dev reach this machine's Claude Code sessions
                                            (Pro/Team): runs sessionpipe's install and control pairing
