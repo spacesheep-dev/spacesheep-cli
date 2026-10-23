@@ -141,3 +141,10 @@ test("the start nudge tells the session to name the message it answers", () => {
   const n = startNudge({ session_id: SID, source: "startup" }, { talk: true }, false);
   assert.ok(n.includes(`--session ${SID} --to <the line's id> "<text>"`));
 });
+
+test("--help lists `[--to MESSAGE_ID]` on talk reply: tools read it to know --to is there", () => {
+  const { spawnSync } = require("child_process");
+  const path = require("path");
+  const r = spawnSync(process.execPath, [path.join(__dirname, "..", "bin", "spacesheep.js"), "--help"], { encoding: "utf8", env: { ...process.env, SPACESHEEP_KEY: "" } });
+  assert.match(r.stdout + r.stderr, /talk reply <text> \[--session ID\] \[--to MESSAGE_ID\]/);
+});
