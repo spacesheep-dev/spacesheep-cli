@@ -284,10 +284,11 @@ test("a second Claude home where Claude Code never ran isn't written", () => {
   assert.strictEqual(h.present, false);
 });
 
-test("--ssh: a machine already signed in is installed with its own key; nothing is minted or sent", async () => {
+test("--ssh: authenticated hosts need no local key and only receive the read-only probe", async () => {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "ss-ssh-"));
   const log = path.join(bin, "calls.txt");
-  fs.writeFileSync(path.join(bin, "ssh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\ncat >> ${JSON.stringify(log)}\nexit 0\n`, { mode: 0o755 });
+  const probe = 'SPACESHEEP_PROBE {"node":"/usr/bin/node","hostname":"box","machine":"nest-02","key":"valid"}';
+  fs.writeFileSync(path.join(bin, "ssh"), `#!/bin/sh\necho "$1" >> ${JSON.stringify(log)}\ncat >/dev/null\necho '${probe}'\n`, { mode: 0o755 });
   const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-cfg-"));
   const env = { PATH: process.env.PATH, SPACESHEEP_CONFIG_DIR: process.env.SPACESHEEP_CONFIG_DIR, SPACESHEEP_KEY: process.env.SPACESHEEP_KEY };
   process.env.PATH = `${bin}:${process.env.PATH}`;
@@ -296,14 +297,13 @@ test("--ssh: a machine already signed in is installed with its own key; nothing 
   try {
     const lines = [];
     await require("../lib/install").run({ ssh: ["box-1,box-2"], skip: ["nekko"] }, (l) => lines.push(l), () => {});
-    const calls = fs.readFileSync(log, "utf8");
-    assert.deepStrictEqual(calls.split("\n").filter((l) => /^box-/.test(l)).map((l) => l.split(" ")[0]), ["box-1", "box-2"]);
-    assert.ok(calls.split("\n").filter((l) => /^box-/.test(l)).every((l) => l.includes("install --no-login")));
-    assert.match(calls, /--skip nekko/);
-    assert.ok(!/ss_/.test(calls), "no key went over ssh");
+    assert.deepStrictEqual(fs.readFileSync(log, "utf8").trim().split("\n"), ["box-1", "box-2"]);
     assert.match(lines.join("\n"), /2 of 2 machine\(s\) connected/);
+    assert.strictEqual(lines.filter((l) => l.includes("key reused:")).length, 2);
   } finally {
     for (const [k, v] of Object.entries(env)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    fs.rmSync(bin, { recursive: true, force: true });
+    fs.rmSync(cfgDir, { recursive: true, force: true });
   }
 });
 
