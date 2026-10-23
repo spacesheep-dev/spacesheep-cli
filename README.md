@@ -43,15 +43,25 @@ A machine that is already signed in keeps its own key; only one that isn't gets 
 key made for it here, sent over ssh stdin, never on screen. A machine with no
 Node.js is named, not half-installed (the bridge needs Node 20+).
 
-- **Claude Code** gets the server by its URL, signed in by a helper that prints this
-  machine's key (`spacesheep mcp headers`). Claude Code (2.1.71+) drops a plugin's
-  server when a configured one has the same URL, so the spacesheep plugin keeps its
-  `/sheep` and `/talk` and its own copy of the server, which would ask for a sign-in,
-  steps aside: no doubled tools, and nothing to switch off.
+- **Claude Code** homes selected for configuration get the existing HTTP route,
+  signed in by `spacesheep mcp headers`. Homes with an enabled plugin already
+  reaching that endpoint are skipped as described below.
 - An entry that already reached spacesheep (the remote URL, under any name) is
   **replaced**, not doubled, so no tool shows up twice. Everything else in each
   config file is kept, and a file that isn't plain JSON (comments) is left alone
-  and named.
+  and named. An **enabled Claude Code plugin** keeps its existing connection:
+  `install` reads its cached `.mcp.json` (including shared symlinks) and **skips
+  the bridge for that home**. The plan names the exact file and server entry.
+  That plugin still signs in separately. To switch to this machine's key, set
+  `enabledPlugins["spacesheep@spacesheep"]` to `false` in that home's
+  `settings.json` and rerun `install`. Disabling the plugin removes **/sheep and
+  talk**; install fetches /sheep and restores `commands/talk.md` from the disabled
+  plugin's cache. Keep the plugin installed and omit `--no-skill`. Shared settings
+  affect every home linked to that file.
+- Config symlinks stay symlinks: writes replace their real target atomically.
+  Claude state writes hold `.claude.json.lock` across reading and writing. A held
+  lock is left alone and reported with its path: wait for Claude to finish saving
+  or close its sessions, then retry.
 - The tools come live from the server, so a new tool needs no reinstall. Re-run
   `install` to refresh the skill.
 - A run from `npx` copies the CLI (no dependencies) into `~/.config/spacesheep/cli`
@@ -59,11 +69,18 @@ Node.js is named, not half-installed (the bridge needs Node 20+).
   every harness start would wait on npm and fail offline.
 - Revoke one machine in Settings → API keys: each machine has its own key.
 - `spacesheep mcp status` shows which harnesses go through it; `spacesheep mcp
-  uninstall` takes it back out. `--only codex,cursor` limits either, `--skip`
-  leaves some out (an agent, or one Claude home by its folder: `--skip
-  .claude-test` or `--skip test`), `--dry-run` shows what would change.
+  uninstall` takes it back out. `--only codex,cursor` limits install/uninstall;
+  `--except` excludes the same ids (`--skip` also accepts short home names,
+  such as `--skip work`). These selectors apply to MCP entries **and skills**.
+  `--dry-run` shows what would change in harness configs and skills (the existing
+  sign-in/key check still runs).
+  For example, `spacesheep install --only claude-code --except
+  claude-code:.claude-placeholder,claude-code:.claude-other-model` leaves those
+  homes alone. `claude-code` selects the whole family; `claude-code:<directory
+  basename>` selects one additional home. See [install safety and fixture
+  replay](docs/install-safety.md).
 - A second Claude home counts once Claude Code has run in it (it has a
-  `.claude.json`); a folder with only settings is left alone.
+  `.claude.json`); a folder with only settings is left alone by default.
 - Restart open harnesses (or reconnect in Claude Code's `/mcp`) to pick it up.
 - To pin a version (a fleet, or before npm has it), run a release tag from GitHub:
   `npx -y github:spacesheep-dev/spacesheep-cli#v1.33.0 install`, and pass the same
@@ -421,7 +438,7 @@ open http://localhost:4280/
 | `spacesheep login` | Browser sign-in; stores a key in `~/.config/spacesheep/config.json` |
 | `spacesheep login --code ssc_…` | Sign in with the one-time code in the prompt at [spacesheep.dev/start](https://spacesheep.dev/start): no browser, because copying it while signed in was the approval. Works once, for 30 minutes; mints this machine its own key, named after its hostname (or `--name`) |
 | `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
-| `spacesheep install` | Connect every coding harness on this machine (Claude Code, Codex, Gemini CLI, Antigravity, Cursor, Windsurf, VS Code, opencode) through this machine's one key, and install the `/sheep` skill. Options: `--code`, `--key`, `--only`, `--skip`, `--no-skill`, `--dry-run`, `--ssh host1,host2`, `--package <npm spec>` |
+| `spacesheep install` | Connect every coding harness on this machine (Claude Code, Codex, Gemini CLI, Antigravity, Cursor, Windsurf, VS Code, opencode) through this machine's one key, and install the `/sheep` skill. Options: `--code`, `--key`, `--only`, `--except`, `--skip`, `--no-skill`, `--dry-run`, `--ssh host1,host2`, `--package <npm spec>` |
 | `spacesheep mcp` | The spacesheep MCP server over stdio, on this machine's key — what `install` points every harness at |
 | `spacesheep mcp status \| uninstall` | Which harnesses go through it; take it out of them |
 | `spacesheep logout` | Forget the stored key |
