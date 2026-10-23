@@ -13,7 +13,7 @@ test("the staged address matches the server's (sha256 of path NUL bytes NUL, 12 
   assert.equal(stagedSha("index.html", Buffer.from(html)), "d63139cc0c94");
 });
 
-test("only a big site asks the server first", () => {
+test("only a big site says it is checking with the server", () => {
   assert.equal(wantsPreflight([{ size: 10 }, { size: 10 }]), false);
   assert.equal(wantsPreflight(Array.from({ length: 201 }, () => ({ size: 1 }))), true);
   assert.equal(wantsPreflight([{ size: 60 * 1024 * 1024 }]), true);
@@ -84,7 +84,8 @@ test("stageAll skips what is staged, waits out a 429, and renews an expired link
     assert.equal(out.length, 5);
     assert.deepEqual(puts.sort(), ["f2.txt", "f3.txt", "f4.txt"]);
     for (const f of files) assert.equal(out.find((o) => o.path === f.path).staged_sha, f.sha);
-    assert.ok(logs.some((l) => /2 file\(s\) already staged/.test(l)));
+    assert.ok(logs.includes(`  = ${files[0].path} unchanged`), logs.join("\n"));
+    assert.ok(logs.includes(`  = ${files[1].path} unchanged`));
     assert.ok(logs.some((l) => /upload rate limit .* resuming in 1 min/.test(l)), logs.join("\n"));
   });
 });
