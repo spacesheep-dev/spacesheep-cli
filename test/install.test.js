@@ -284,10 +284,10 @@ test("a second Claude home where Claude Code never ran isn't written", () => {
   assert.strictEqual(h.present, false);
 });
 
-test("--ssh: a machine already signed in is installed with its own key; nothing is minted or sent", async () => {
+test("--ssh: a working host is skipped even without a local key; nothing is minted or sent", async () => {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "ss-ssh-"));
   const log = path.join(bin, "calls.txt");
-  fs.writeFileSync(path.join(bin, "ssh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\ncat >> ${JSON.stringify(log)}\nexit 0\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, "ssh"), `#!/bin/sh\n[ "$1" = -- ] && shift\necho "$@" >> ${JSON.stringify(log)}\ncat >> ${JSON.stringify(log)}\ncase "$*" in *status*) echo '{"key_valid":true,"machine":"Existing name"}';; esac\nexit 0\n`, { mode: 0o755 });
   const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-cfg-"));
   const env = { PATH: process.env.PATH, SPACESHEEP_CONFIG_DIR: process.env.SPACESHEEP_CONFIG_DIR, SPACESHEEP_KEY: process.env.SPACESHEEP_KEY };
   process.env.PATH = `${bin}:${process.env.PATH}`;
@@ -297,11 +297,10 @@ test("--ssh: a machine already signed in is installed with its own key; nothing 
     const lines = [];
     await require("../lib/install").run({ ssh: ["box-1,box-2"], skip: ["nekko"] }, (l) => lines.push(l), () => {});
     const calls = fs.readFileSync(log, "utf8");
-    assert.deepStrictEqual(calls.split("\n").filter((l) => /^box-/.test(l)).map((l) => l.split(" ")[0]), ["box-1", "box-2"]);
-    assert.ok(calls.split("\n").filter((l) => /^box-/.test(l)).every((l) => l.includes("install --no-login")));
-    assert.match(calls, /--skip nekko/);
+    assert.deepStrictEqual(calls.split("\n").filter((l) => /^box-/.test(l)).map((l) => l.split(" ")[0]), ["box-1", "box-1", "box-2", "box-2"]);
+    assert.ok(!calls.includes("install"), "a working host is checked and skipped");
     assert.ok(!/ss_/.test(calls), "no key went over ssh");
-    assert.match(lines.join("\n"), /2 of 2 machine\(s\) connected/);
+    assert.match(lines.join("\n"), /0 machine\(s\) connected, 2 skipped/);
   } finally {
     for (const [k, v] of Object.entries(env)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }

@@ -36,13 +36,23 @@ on its own: eleven machines with five harnesses each is about fifty sign-ins. Wi
 it, that's eleven commands, or one, from a machine that's already set up:
 
 ```bash
-spacesheep install --ssh lab-1,lab-2,gpu-box
+spacesheep install --ssh lab-1,lab-2,gpu-box   # keeps working keys; new keys go over ssh stdin
+spacesheep install --ssh lab-1 --dry-run       # preview the host's plan without minting a key
 ```
 
-A machine that is already signed in keeps its own key; only one that isn't gets a
-key made for it here, sent over ssh stdin, never on screen. A machine with no
-Node.js is named, not half-installed (the bridge needs Node 20+).
-
+- SSH first checks that the host is reachable and has Node 20+ and `npx`, then
+  verifies the host's resolved key with `mcp status --json`. A host with a working
+  key is skipped; `--force` replaces it. A failed probe or an inconclusive status
+  check creates no key. If installation fails after minting, the error identifies
+  the new key to revoke in Settings → API keys (by its prefix, or id when supplied).
+- Existing machine names are kept. `--name "My laptop"` explicitly names the
+  machine; use it with `--force` to rename a host that already has a working key.
+  A new machine defaults to its own hostname. `--only claude-code:.claude-work`
+  selects the same account home over SSH as it does locally.
+- `--dry-run` previews harness, skill and CLI-copy changes without signing in or
+  writing them, including on a host that has no key. `--force --dry-run` previews
+  replacement on a signed-in host. SSH uses `--package` for both status and install;
+  that package must support the verified status fields (older versions are refused).
 - **Claude Code** gets the server by its URL, signed in by a helper that prints this
   machine's key (`spacesheep mcp headers`). Claude Code (2.1.71+) drops a plugin's
   server when a configured one has the same URL, so the spacesheep plugin keeps its
@@ -66,8 +76,9 @@ Node.js is named, not half-installed (the bridge needs Node 20+).
   `.claude.json`); a folder with only settings is left alone.
 - Restart open harnesses (or reconnect in Claude Code's `/mcp`) to pick it up.
 - To pin a version (a fleet, or before npm has it), run a release tag from GitHub:
-  `npx -y github:spacesheep-dev/spacesheep-cli#v1.33.0 install`, and pass the same
-  spec to `--ssh` with `--package github:spacesheep-dev/spacesheep-cli#v1.33.0`.
+  `npx -y github:spacesheep-dev/spacesheep-cli#TAG install`, and pass the same
+  spec to `--ssh` with `--package github:spacesheep-dev/spacesheep-cli#TAG`.
+  Replace `TAG` with a release that includes SSH preflight support.
 
 ## Deploy automatically from GitHub Actions
 
@@ -425,7 +436,7 @@ open http://localhost:4280/
 | `spacesheep login` | Browser sign-in; stores a key in `~/.config/spacesheep/config.json` |
 | `spacesheep login --code ssc_…` | Sign in with the one-time code in the prompt at [spacesheep.dev/start](https://spacesheep.dev/start): no browser, because copying it while signed in was the approval. Works once, for 30 minutes; mints this machine its own key, named after its hostname (or `--name`) |
 | `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
-| `spacesheep install` | Connect every coding harness on this machine (Claude Code, Codex, Gemini CLI, Antigravity, Cursor, Windsurf, VS Code, opencode) through this machine's one key, and install the `/sheep` skill. Options: `--code`, `--key`, `--only`, `--skip`, `--no-skill`, `--dry-run`, `--ssh host1,host2`, `--package <npm spec>` |
+| `spacesheep install` | Connect every coding harness on this machine (Claude Code, Codex, Gemini CLI, Antigravity, Cursor, Windsurf, VS Code, opencode) through this machine's one key, and install the `/sheep` skill. Options: `--code`, `--key`, `--name`, `--only`, `--skip`, `--no-skill`, `--dry-run`, `--ssh host1,host2`, `--force` (replace working keys over SSH), `--package <npm spec>` |
 | `spacesheep mcp` | The spacesheep MCP server over stdio, on this machine's key — what `install` points every harness at |
 | `spacesheep mcp status \| uninstall` | Which harnesses go through it; take it out of them |
 | `spacesheep logout` | Forget the stored key |
