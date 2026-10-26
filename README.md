@@ -490,6 +490,16 @@ of its own: `deploy` stages each file with a PUT, then calls the `deploy` tool w
 the staged hashes. Anything the tools can do, the CLI can do: the commands above
 wrap the everyday ones, and `spacesheep call` runs any other tool by name.
 
+Every HTTP request identifies itself as
+`spacesheep-cli/<package version> (+https://github.com/spacesheep-dev/spacesheep-cli) Node/<Node version>`.
+If a staged upload gets a non-JSON or malformed JSON response, the error includes
+the HTTP status, content type, Cloudflare ray (when present), and a short body
+excerpt. It names the file path and redacts the upload capability URL and token.
+A Cloudflare `error code: 1010` means the edge refused the request for not
+identifying its client, before it reached spacesheep. Custom uploaders must send
+their own User-Agent; curl already sends one. A 403 stops that upload without a
+retry or an inline-upload fallback.
+
 ## Requirements
 
 Node 20 or newer.
