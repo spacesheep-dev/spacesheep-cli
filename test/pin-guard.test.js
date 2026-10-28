@@ -35,7 +35,12 @@ test("deploy stops before touching the network when the pin names another page",
   fs.writeFileSync(path.join(dir, "index.html"), "<html><head><title>ET-SoC1 hot line</title></head><body>new</body></html>");
   fs.writeFileSync(path.join(dir, ".spacesheep.json"), JSON.stringify({ space: "abc", url: "https://spacesheep.dev/@y/dvfs-brief", page_title: "DVFS brief" }));
   const client = { call: async () => { throw new Error("the network was touched"); } };
-  await assert.rejects(deploy(client, dir, {}, () => {}), /pinned to https:\/\/spacesheep\.dev\/@y\/dvfs-brief/);
+  // GitHub Actions skips the check, so this test runs as if outside it (it runs in Actions on release).
+  const prev = process.env.GITHUB_ACTIONS;
+  delete process.env.GITHUB_ACTIONS;
+  try {
+    await assert.rejects(deploy(client, dir, {}, () => {}), /pinned to https:\/\/spacesheep\.dev\/@y\/dvfs-brief/);
+  } finally { if (prev !== undefined) process.env.GITHUB_ACTIONS = prev; }
 });
 
 test("--new publishes a new space from a pinned folder and re-pins it to the new page", async () => {

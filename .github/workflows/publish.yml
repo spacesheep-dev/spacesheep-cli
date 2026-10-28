@@ -1,0 +1,60 @@
+name: Publish to npm
+
+# Publishing a GitHub release puts its version on npm. The release's tag must be
+# "v" + the version in package.json at that commit (v1.35.0 for 1.35.0), or the
+# job fails before anything is published. A release marked as a pre-release goes
+# to the "next" dist-tag, so `npx spacesheep@latest` keeps the last full release.
+#
+# npm trusted publishing: npm trusts this workflow file in this repo, so there is
+# no npm token in the repo's secrets. Set it up once on npmjs.com, under the
+# package's Settings → Trusted publishing: GitHub Actions, spacesheep-dev /
+# spacesheep-cli, workflow publish.yml, and allow "npm publish" (a new setup
+# allows only "npm stage publish"). A release runs the workflow file at its
+# tag, so release a commit that has this file.
+#
+# Publish releases one at a time, oldest first. Each release runs on its own:
+# a shared concurrency group would cancel every pending release but the newest,
+# and npm refuses "latest" for a version lower than one it already has.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - run: npm install -g npm@11
+
+      - name: The tag names the version in package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::The release's tag is $TAG, but package.json says $VERSION. Release the commit that sets the version, tagged v$VERSION."
+            exit 1
+          fi
+
+      - run: npm test
+
+      - name: Publish
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ "$PRERELEASE" = "true" ]; then
+            npm publish --tag next
+          else
+            npm publish
+          fi
