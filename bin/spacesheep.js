@@ -59,9 +59,13 @@ const HELP = `
                                            Takes --code ssc_… or --key ss_… to sign in with no browser.
                                            --skip leaves some out: an agent (cursor) or one Claude home
                                            by its folder (.claude-work, or just work)
-    spacesheep install --ssh host1,host2   the same on other machines, from here. A machine that is already
-                                           signed in keeps its key; one that isn't gets its own, over ssh
-                                           stdin, never on screen. --package <npm spec> pins the version
+    spacesheep install --ssh host1,host2   probe SSH, Node 20+ and config before minting. Existing valid keys
+                                           are reused; those hosts' configs are left alone. Missing/rejected
+                                           keys get a new key over ssh stdin. Failed probes mint nothing.
+                                           Keeps configured names; first install: --machine NAME (or --name),
+                                           else the host's hostname, never its SSH alias. Naming flags must
+                                           agree with a configured name. Ends with a per-host summary;
+                                           failures don't stop other hosts. --package <npm spec> pins the version
     spacesheep mcp                         the spacesheep MCP server over stdio, on this machine's key —
                                            what install points every harness at
     spacesheep mcp status | uninstall      which harnesses go through it; take it out of them

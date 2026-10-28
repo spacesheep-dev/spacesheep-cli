@@ -39,9 +39,23 @@ it, that's eleven commands, or one, from a machine that's already set up:
 spacesheep install --ssh lab-1,lab-2,gpu-box
 ```
 
-A machine that is already signed in keeps its own key; only one that isn't gets a
-key made for it here, sent over ssh stdin, never on screen. A machine with no
-Node.js is named, not half-installed (the bridge needs Node 20+).
+Each host is probed first: SSH, a working Node 20+ (including stable Homebrew and
+nvm paths), its existing spacesheep config, and authentication with its own key.
+**Existing valid keys are reused**, and those hosts' configs are left untouched.
+To refresh harnesses or skills on an already connected host, run `install` locally
+on that host. Only a missing key or one explicitly rejected by spacesheep gets a
+new key, sent over SSH stdin, never on screen. A failed probe, unreadable config,
+or uncertain authentication (such as an outage) mints nothing.
+
+The configured machine name is kept even when replacing a revoked key. For a
+first install, `--machine "My laptop"` chooses the name; otherwise the host's own
+hostname is used, **never the SSH alias**. The existing explicit naming flag
+`--name NAME` is also accepted. Both flags are refused if they conflict with a
+configured name; SSH installation does not rename an established machine.
+
+Every run ends with one row per host: resolved Node path, machine name, and
+`key reused`, `key minted`, or `skipped` with a reason. A failed host does not
+stop the others; any failure gives the overall command a nonzero exit status.
 
 - **Claude Code** gets the server by its URL, signed in by a helper that prints this
   machine's key (`spacesheep mcp headers`). Claude Code (2.1.71+) drops a plugin's
