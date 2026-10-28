@@ -170,6 +170,16 @@ test("skill: added where a harness reads skills, the command copy updated in pla
   assert.ok(fs.existsSync(path.join(home, ".cursor", "skills", "sheep", "SKILL.md")));
 });
 
+test("skill: the frontmatter is YAML a strict parser reads, its description quoted", () => {
+  // Antigravity parses SKILL.md frontmatter strictly: a bare value holding ": " failed
+  // the whole file ("yaml: line 2: mapping values are not allowed in this context").
+  const [open, name, description, close] = S.FRONTMATTER.split("\n");
+  assert.deepStrictEqual([open, name, close], ["---", "name: sheep", "---"]);
+  // A JSON string is a YAML double-quoted scalar, so any words parse back as written.
+  assert.match(description, /^description: "/);
+  assert.strictEqual(JSON.parse(description.slice("description: ".length)), S.DESCRIPTION);
+});
+
 // --- the bridge, against a stand-in server ----------------------------------------------
 
 function standIn(handler) {
