@@ -430,7 +430,7 @@ open http://localhost:4280/
 | `spacesheep mcp status \| uninstall` | Which harnesses go through it; take it out of them |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
-| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). |
+| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--team`, `--team-access`, `--no-team`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). Every deploy prints where the space lives (a team, or personal). |
 | `spacesheep list` | Your spaces |
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
@@ -495,3 +495,16 @@ wrap the everyday ones, and `spacesheep call` runs any other tool by name.
 Node 20 or newer.
 
 MIT.
+
+## Publishing for a team
+
+A new space is personal unless a team is named. To make every new page from a repo go to one of your teams, put a `.spacesheep.json` at the repo's root:
+
+```json
+{ "team": "Acme" }
+```
+
+The team is a name, slug or id of a team you are on. `spacesheep deploy` looks for it in this order: `--team`, the folder's own `.spacesheep.json`, then the nearest one above the folder, no higher than the repository's root (and never your home folder). `--no-team` publishes personal. The server refuses a team you are not on and a name two of your teams share, and publishes nothing then.
+
+A team only ever applies to a **new** space. Pushing an update never moves a live space into or out of a team: if the folder names a different team, the deploy says so and changes nothing. Move a live space from its Share dialog (Lives in). Every deploy prints a `Lives in` line saying who can read the page because of where it lives, including anyone a team admits by email domain.
+

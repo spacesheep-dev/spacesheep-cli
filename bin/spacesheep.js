@@ -147,7 +147,11 @@ const HELP = `
                              (a pinned folder whose index.html has a different <title> refuses without one of these)
     --title, --slug, --emoji, --description   metadata for a new space (kept on update unless passed)
     --visibility <public|signed_in|members|private>   new spaces only; default private
-    --org <slug>             publish under an org
+    --team <name|slug|id>    put a NEW space in one of your teams (else the team in this folder's
+                             .spacesheep.json, or the nearest one above it in the repo; never a default)
+    --team-access <view|edit>   what the team may do on a new space; default view
+    --no-team                publish personal, whatever a .spacesheep.json names
+    --org <slug>             publish under an organization with its own address (not a Team: use --team)
     -m, --message <text>     version name shown in the space's history
     --json                   print the server's JSON result
 
@@ -187,7 +191,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
+const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -273,6 +277,9 @@ const commands = {
     const r = await deploy(client(), opts._[0], { ...opts, via: process.env.GITHUB_ACTIONS ? "GitHub Actions" : "CLI" }, log);
     if (opts.json) return out(r);
     log(`\n  ✓ ${r.is_update ? "Updated" : "Created"} ${r.url}`);
+    // Every push says who can read it because of where it lives, team or personal.
+    if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
+    if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
     const local = require("../lib/mirror").localNote(r.url);
