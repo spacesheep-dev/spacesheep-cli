@@ -279,6 +279,7 @@ const commands = {
     log(`\n  ✓ ${r.is_update ? "Updated" : "Created"} ${r.url}`);
     // Every push says who can read it because of where it lives, team or personal.
     if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
+    if (r.team_missed) log(`  ! ${r.team_missed}`);
     if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);

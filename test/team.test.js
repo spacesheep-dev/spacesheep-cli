@@ -79,3 +79,10 @@ test("--no-team sends none, and a personal answer leaves no team in the pin", as
   const pin = JSON.parse(fs.readFileSync(path.join(page, ".spacesheep.json"), "utf-8"));
   assert.equal(pin.team, undefined);
 });
+
+test("a server that doesn't know team is caught, not trusted", async () => {
+  const page = tmp("old-server");
+  write(page, "index.html", "<html><head><title>O</title></head><body>o</body></html>");
+  const { r } = await run(page, { team: "Acme" }, { uuid: "o-id", url: "https://spacesheep.dev/@y/o" });
+  assert.match(r.team_missed, /published as a personal space, not for "Acme"/);
+});
