@@ -420,9 +420,9 @@ const commands = {
     throw new Error("usage: spacesheep keys create [--scope stream|sessions|full] [--name NAME] [--json] | keys save   (reads a key from stdin)");
   },
   async stream(opts) {
-    if (require("../lib/video").sourceOf(opts)) return require("../lib/video").run(opts, cfg, log);
     if (opts.removeService) return require("../lib/stream-service").remove(opts, log);
     if (opts.service) return require("../lib/stream-service").install(opts, log);
+    if (require("../lib/video").sourceOf(opts)) return require("../lib/video").run(opts, cfg, log);
     return require("../lib/stream").run(opts, cfg, log);
   },
   async streams(opts) { return require("../lib/stream").list(opts, cfg, out); },
