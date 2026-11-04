@@ -26,10 +26,10 @@ async function request(line, env = {}) {
 }
 const usage = async (line, re, env = {}) => assert.rejects(request(line, env), (e) => e.code === "EUSAGE" && re.test(e.message));
 
-test("a read: the name fills {space.id}, no query, the saved key as Bearer", async () => {
+test("a read: the name fills {space.id} and goes as its own input too, the saved key as Bearer", async () => {
   const r = await request("spaces get @james/plan");
   assert.equal(r.method, "GET");
-  assert.equal(r.url, `${ORIGIN}/v1/spaces/%40james%2Fplan`);
+  assert.equal(r.url, `${ORIGIN}/v1/spaces/%40james%2Fplan?space=%40james%2Fplan`);
   assert.equal(r.headers.Authorization, "Bearer ss_test");
   assert.equal(r.body, undefined);
 });
@@ -39,8 +39,9 @@ test("an update: the item in the path, the rest a JSON body, typed by the table"
   assert.equal(r.method, "PATCH");
   assert.equal(r.url, `${ORIGIN}/v1/spaces/0b7c1a52-7f3e-4f6e-9d1a-0c1d2e3f4a5b`);
   assert.equal(r.headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(r.body), { title: "Plan", listed: true, visibility: "public" });
-  assert.deepEqual(JSON.parse((await request("spaces update x --listed false")).body), { listed: false });
+  // <space> is the name input (a link, @handle/slug or uuid): it goes as `space` too
+  assert.deepEqual(JSON.parse(r.body), { space: "0b7c1a52-7f3e-4f6e-9d1a-0c1d2e3f4a5b", title: "Plan", listed: true, visibility: "public" });
+  assert.deepEqual(JSON.parse((await request("spaces update x --listed false")).body), { space: "x", listed: false });
 });
 
 test("query inputs: integers and true/false as words, --flag=value too", async () => {
@@ -55,9 +56,11 @@ test("a plain {var} path, and a JSON flag parsed", async () => {
   assert.deepEqual(JSON.parse(r.body), { value: { load: 0.4 } });
 });
 
-test("a name/id pair given as a flag: the id wins the path", async () => {
+test("a name/id pair given as a flag: the id wins the path, and stays out of the query", async () => {
   const r = await request("versions list --space-id 0b7c1a52-7f3e-4f6e-9d1a-0c1d2e3f4a5b --limit 2");
   assert.match(r.url, /\/v1\/spaces\/0b7c1a52-7f3e-4f6e-9d1a-0c1d2e3f4a5b\/versions\?limit=2$/);
+  const byName = await request("versions list --space plan --limit 2");
+  assert.match(byName.url, /\/v1\/spaces\/plan\/versions\?space=plan&limit=2$/);
 });
 
 test("old names keep working: talk reply <text> --to N, talk on, bare talk", async () => {
