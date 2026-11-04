@@ -181,6 +181,7 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     if (req.method === "GET" && req.url === "/v1/me") return [200, '{"account":{"handle":"james","plan":"pro"}}'];
     if (req.method === "PATCH" && req.url.startsWith("/v1/spaces/")) return [400, '{"code":"invalid","message":"Check the title.","violations":[{"field":"title","message":"at most 200 characters"}]}'];
     if (req.method === "POST" && req.url === "/v1/me/talkMessages") return [200, '{"talk_message":{"id":"13"}}'];
+    if (req.method === "GET" && req.url.startsWith("/v1/spaces/")) return [400, '{"code":"invalid","message":"size: takes a whole number","violations":[{"field":"size","message":"takes a whole number"},{"field":"path","message":"is required"}]}'];
   });
   const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
   try {
@@ -197,6 +198,10 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     const badJson = await cli(["spaces", "update", "@james/plan", "--title", "x", "--json"], env);
     assert.equal(badJson.code, 1);
     assert.equal(JSON.parse(badJson.out).code, "invalid");
+    // A message that is one of its violations isn't printed twice; the others still are.
+    const one = await cli(["spaces", "get", "@james/plan"], env);
+    assert.equal(one.code, 1);
+    assert.equal(one.err, "\n  ✗ size: takes a whole number\n    path: is required\n\n");
 
     const before = seen.length;
     const wrong = await cli(["spaces", "get", "--nope"], env);
