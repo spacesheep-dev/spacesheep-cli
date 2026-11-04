@@ -474,9 +474,11 @@ const commands = {
   },
 };
 
-// Today's commands the doors table also names, without listing them in a `replaces`:
-// they keep doing what they do here. The table takes one over by replacing it.
-const KEEP = new Set(["sessions list", "sessions get", "sessions export"]);
+// Today's commands that keep running here whatever the doors table says. `sessions …`:
+// the table names them without a `replaces` (today's `export -o DIR` writes files).
+// `talk listen`: the table replaces it with one create call, but today's keeps polling
+// and takes --once. Both are open questions on the table, not the CLI's to settle.
+const KEEP = new Set(["sessions list", "sessions get", "sessions export", "talk listen"]);
 
 /** `spacesheep <noun> <verb>` from the server's doors table (lib/doors.js). Resolves
  *  the exit code, or null for a command line the table doesn't take: then today's
@@ -505,7 +507,7 @@ async function door(argv) {
     return argv.includes("--help") || argv.includes("-h") ? 0 : 2;
   }
   const first = Array.isArray(found) ? found[0] : found;
-  if (commands[word] && !first.via && KEEP.has(argv.slice(0, first.used).join(" "))) return null;
+  if (commands[word] && KEEP.has(argv.slice(0, first.used).join(" "))) return null;
   return doors.run(found, argv.slice(first.used), {
     out: (s) => console.log(s), err: (s) => console.error(s),
     origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,

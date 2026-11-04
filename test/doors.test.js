@@ -204,6 +204,10 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     assert.equal(reply.code, 0, reply.err);
     assert.deepEqual(JSON.parse(seen.at(-1).body), { text: "done", reply_to: 12, session: "s-1" });
 
+    // `talk listen` keeps today's polling loop: the door never sends its create call.
+    await cli(["talk", "listen", "--once", "--session", "s-1"], env);
+    assert.ok(!seen.some((x) => x.url.startsWith("/v1/me/talkListeners")));
+
     const help = await cli(["spaces", "update", "--help"], env);
     assert.equal(help.code, 0);
     assert.match(help.out, /spacesheep spaces update <space> \[flags\]/);
@@ -233,10 +237,12 @@ test("end to end: a server with no /v1/doors.json runs today's commands, unchang
   } finally { s.close(); }
 });
 
-test("today's commands the table names without replacing keep running here", async () => {
+test("today's commands kept here whatever the table says", async () => {
   // `sessions export -o DIR` writes files; the table's `sessions export` is one call.
   const found = doors.match(TABLE, ["sessions", "export"]);
   assert.ok(found && !found.via);
+  // `talk listen` polls and takes --once; the table's replacement is one create call.
+  assert.ok(doors.match(TABLE, ["talk", "listen"])[0].via);
   const src = fs.readFileSync(path.join(__dirname, "..", "bin", "spacesheep.js"), "utf8");
-  assert.match(src, /KEEP = new Set\(\["sessions list", "sessions get", "sessions export"\]\)/);
+  assert.match(src, /KEEP = new Set\(\["sessions list", "sessions get", "sessions export", "talk listen"\]\)/);
 });
