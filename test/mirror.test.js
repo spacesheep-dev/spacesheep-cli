@@ -72,7 +72,7 @@ test("mirror: pages come from spacesheep signed in, framable, local; foreign wri
   let trades = 0, expireNext = false;
   const upstream = http.createServer(async (req, res) => {
     let body = ""; for await (const c of req) body += c;
-    seen.push({ method: req.method, url: req.url, cookie: req.headers.cookie || "", origin: req.headers.origin || "", body });
+    seen.push({ ua: req.headers["user-agent"], method: req.method, url: req.url, cookie: req.headers.cookie || "", origin: req.headers.origin || "", body });
     const origin = `http://127.0.0.1:${upstream.address().port}`;
     if (req.url === "/api/account/web-session") {
       if (req.headers.authorization !== "Bearer ss_test") { res.writeHead(401); return res.end("{}"); }
@@ -113,7 +113,7 @@ test("mirror: pages come from spacesheep signed in, framable, local; foreign wri
     q.on("error", reject); if (body) q.write(body); q.end();
   });
   try {
-    const page = await call("/@misha/plan", { headers: { Cookie: "ss_app=forged; ss_theme=light" } });
+    const page = await call("/@misha/plan", { headers: { Cookie: "ss_app=forged; ss_theme=light", "User-Agent": "Mozilla/5.0" } });
     assert.equal(page.status, 200);
     assert.equal(page.body.toString(), `<p>signed in</p><a href="http://localhost:${port}/@misha/other">other</a>`);
     assert.equal(page.headers["x-frame-options"], undefined);
@@ -139,6 +139,8 @@ test("mirror: pages come from spacesheep signed in, framable, local; foreign wri
     expireNext = true;
     assert.match((await call("/@misha/plan")).body.toString(), /signed in/);
     assert.equal(trades, 2);
+    const ua = `spacesheep-cli/${require("../package.json").version} (+https://github.com/spacesheep-dev/spacesheep-cli) Node/${process.versions.node}`;
+    for (const request of seen) assert.equal(request.ua, ua);
 
     assert.equal((await call("/", { headers: { Host: `evil.example:${port}` } })).status, 421);
   } finally {

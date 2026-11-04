@@ -230,7 +230,9 @@ test("bridge: relays JSON and SSE answers, carries the session, the version and 
     assert.strictEqual(later.authorization, "Bearer ss_test");
     assert.strictEqual(later["mcp-session-id"], "sess-1");
     assert.strictEqual(later["mcp-protocol-version"], "2025-06-18");
-    assert.match(later["user-agent"], /^spacesheep-mcp\/[\d.]+ \(codex\)$/);
+    const ua = `spacesheep-cli/${require("../package.json").version} (+https://github.com/spacesheep-dev/spacesheep-cli) Node/${process.versions.node}`;
+    for (const request of seen) assert.strictEqual(request.headers["user-agent"], ua);
+    assert.deepStrictEqual(seen[0].msg.params.clientInfo, INIT.params.clientInfo);
   } finally { server.close(); }
 });
 
