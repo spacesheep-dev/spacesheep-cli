@@ -20,6 +20,8 @@ test("commands use authenticated MCP and preserve filters, receipts, pagination 
   const calls = [];
   let reject = false;
   const server = http.createServer(async (req, res) => {
+    // Today's server: no doors table, which a fresh config asks for once, with no key.
+    if (req.url === "/v1/doors.json") { res.writeHead(404); return res.end(); }
     assert.equal(req.headers.authorization, "Bearer ss_test_only");
     let input = ""; for await (const part of req) input += part;
     const body = JSON.parse(input);

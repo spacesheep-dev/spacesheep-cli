@@ -483,7 +483,10 @@ const KEEP = new Set(["sessions list", "sessions get", "sessions export", "talk 
 /** `spacesheep <noun> <verb>` from the server's doors table (lib/doors.js). Resolves
  *  the exit code, or null for a command line the table doesn't take: then today's
  *  commands run, as they do against a server with no /v1/doors.json. A word that is
- *  one of today's commands costs no request unless the table last fetched names it. */
+ *  one of today's commands costs no request once a table is cached that doesn't name
+ *  it. With no table cached (a fresh config, or a 404 older than MISSING_TTL), it asks
+ *  once, for at most PROBE_TIMEOUT: else `versions list --space x` on a fresh install
+ *  would run today's `versions <space>` for a space called "list". */
 async function door(argv) {
   const word = argv[0];
   if (!word || word.startsWith("-")) return null;
@@ -491,11 +494,13 @@ async function door(argv) {
   const where = { origin: cfg.origin(), configDir: cfg.configDir() };
   let table;
   try {
+    let probe = false;
     if (commands[word]) {
       const known = await doors.loadTable({ ...where, offline: true });
-      if (!known || !doors.namesWord(known, word)) return null;
+      if (known && !doors.namesWord(known, word)) return null;
+      probe = !known;
     }
-    table = await doors.loadTable(where);
+    table = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT } : where);
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
   if (!table) return null;
   const found = doors.match(table, argv);

@@ -243,8 +243,49 @@ test("end to end: a server with no /v1/doors.json runs today's commands, unchang
     const w = await cli(["whoami"], env);
     assert.equal(w.code, 0);
     assert.match(w.out, /SPACESHEEP_KEY/);
-    assert.equal(seen.length, 1, "today's commands never ask for the table");
+    assert.equal(seen.length, 1, "today's commands don't ask again while the 404 is remembered");
   } finally { s.close(); }
+});
+
+test("end to end: a fresh config asks for the table once, even for one of today's command words", async () => {
+  // `versions` is one of today's commands (`versions <space>`) and a noun in the table.
+  const { s, seen, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE), { ETag: '"t1"' }];
+    if (req.method === "GET" && req.url.includes("versions")) return [200, '{"versions":[]}'];
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const r = await cli(["versions", "list", "--space", "@james/plan"], env);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(seen[0].url, "/v1/doors.json");
+    assert.ok(seen[1] && seen[1].url.includes("versions") && seen[1].auth === "Bearer ss_e2e", "the door's call, not today's");
+    const n = seen.length;
+    const w = await cli(["whoami"], env);
+    assert.equal(w.code, 0);
+    assert.equal(seen.length, n, "a cached table that doesn't name the word: no request");
+
+    // Today's command word first, on another fresh config: one fetch, then today's command.
+    const env2 = { ...env, SPACESHEEP_CONFIG_DIR: tmp() };
+    const before = seen.length;
+    const w2 = await cli(["whoami"], env2);
+    assert.equal(w2.code, 0);
+    assert.match(w2.out, /SPACESHEEP_KEY/);
+    assert.deepEqual(seen.slice(before).map((x) => x.url), ["/v1/doors.json"]);
+    await cli(["whoami"], env2);
+    assert.equal(seen.length, before + 1, "asked once");
+  } finally { s.close(); }
+});
+
+test("end to end: with no answer from the server, today's command waits only the short probe", async () => {
+  const s = http.createServer(() => { /* never answers */ });
+  await new Promise((r) => s.listen(0, "127.0.0.1", r));
+  const env = { SPACESHEEP_ORIGIN: `http://127.0.0.1:${s.address().port}`, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const t0 = Date.now();
+    const w = await cli(["whoami"], env);
+    assert.equal(w.code, 0, w.err);
+    assert.ok(Date.now() - t0 < doors.PROBE_TIMEOUT + 2000, `took ${Date.now() - t0} ms`);
+  } finally { s.closeAllConnections(); s.close(); }
 });
 
 test("today's commands kept here whatever the table says", async () => {
