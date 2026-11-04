@@ -106,6 +106,7 @@ test("ErrorInfo: top level or under error; anything else gets one", () => {
 test("an answer as text lines", () => {
   assert.deepEqual(doors.plain({ space: { title: "Plan", tags: ["a", "b"], empty: "", owner: { handle: "james" } }, versions: [{ sha: "abc" }, "x"] }),
     ["space:", "  title: Plan", "  tags: a, b", "  owner:", "    handle: james", "versions:", "  - sha: abc", "  - x"]);
+  assert.deepEqual(doors.plain({ files: [{ path: "index.html" }], page: { next: "" } }), ["files:", "  - path: index.html"]);
 });
 
 test("bytes in an answer go to -o, never the terminal", () => {
