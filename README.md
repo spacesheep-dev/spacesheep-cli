@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: micmmakarov/spacesheep-cli@v1
+      - uses: spacesheep-dev/spacesheep-cli@v1
         with:
           dir: dist                 # folder with index.html, or a single .html file
           key: ${{ secrets.SPACESHEEP_KEY }}
@@ -167,7 +167,7 @@ versioned `Cellar/node/<version>/` folder (which `brew upgrade node` deletes),
 working, which need you, which are idle, on which machine.
 
 ```bash
-npm install -g github:micmmakarov/spacesheep-cli
+npm install -g github:spacesheep-dev/spacesheep-cli
 spacesheep sessions install --machine "My laptop"   # --claude, --codex or --antigravity for one of them
 spacesheep sessions status
 ```
@@ -297,7 +297,7 @@ longer told to start their own Talk listener.
 
 CLI 1.7.0 adds commands for the remote MCP feedback and session tools.
 To install the merged source directly (without waiting for an npm release), use
-`npm install -g github:micmmakarov/spacesheep-cli`.
+`npm install -g github:spacesheep-dev/spacesheep-cli`.
 
 
 ```bash
