@@ -68,7 +68,8 @@ test("old names keep working: talk reply <text> --to N, talk on, bare talk", asy
   assert.equal(r.method, "POST");
   assert.equal(r.url, `${ORIGIN}/v1/me/talkMessages`);
   // today's `talk reply` joins its words into the text; so does the door
-  assert.deepEqual(JSON.parse(r.body), { text: "all done", reply_to: 12, session: "s-1" });
+  // reply_to is an int64: sent as a string, protobuf JSON's form, so a strict codec takes it too
+  assert.deepStrictEqual(JSON.parse(r.body), { text: "all done", reply_to: "12", session: "s-1" });
   // the table's own command doesn't: one word per arg
   await usage("talk-messages create all done", /takes no words after it/);
   const on = await request("talk on");
@@ -206,7 +207,7 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     // The table is cached now, so the old name goes through the door too.
     const reply = await cli(["talk", "reply", "done", "--to", "12", "--session", "s-1"], env);
     assert.equal(reply.code, 0, reply.err);
-    assert.deepEqual(JSON.parse(seen.at(-1).body), { text: "done", reply_to: 12, session: "s-1" });
+    assert.deepStrictEqual(JSON.parse(seen.at(-1).body), { text: "done", reply_to: "12", session: "s-1" });
 
     // `talk listen` keeps today's polling loop: the door never sends its create call.
     await cli(["talk", "listen", "--once", "--session", "s-1"], env);
