@@ -158,7 +158,9 @@ const HELP = `
   Auth
     SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
     SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
-    SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN})
+    SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN}); its /v1/doors.json, when it
+                             serves one, adds every call as \`spacesheep <noun> <verb>\` (listed below once fetched)
+    SPACESHEEP_DOORS_FILE    read that table from a file instead (a server branch's shared/doors.json)
 
   In GitHub Actions:
     - uses: micmmakarov/spacesheep-cli@v1
@@ -472,14 +474,59 @@ const commands = {
   },
 };
 
+// Today's commands the doors table also names, without listing them in a `replaces`:
+// they keep doing what they do here. The table takes one over by replacing it.
+const KEEP = new Set(["sessions list", "sessions get", "sessions export"]);
+
+/** `spacesheep <noun> <verb>` from the server's doors table (lib/doors.js). Resolves
+ *  the exit code, or null for a command line the table doesn't take: then today's
+ *  commands run, as they do against a server with no /v1/doors.json. A word that is
+ *  one of today's commands costs no request unless the table last fetched names it. */
+async function door(argv) {
+  const word = argv[0];
+  if (!word || word.startsWith("-")) return null;
+  const doors = require("../lib/doors");
+  const where = { origin: cfg.origin(), configDir: cfg.configDir() };
+  let table;
+  try {
+    if (commands[word]) {
+      const known = await doors.loadTable({ ...where, offline: true });
+      if (!known || !doors.namesWord(known, word)) return null;
+    }
+    table = await doors.loadTable(where);
+  } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
+  if (!table) return null;
+  const found = doors.match(table, argv);
+  if (!found) {
+    if (commands[word]) return null;
+    const verbs = doors.nounHelp(table, word);
+    if (!verbs) return null;
+    process.stdout.write(verbs);
+    return argv.includes("--help") || argv.includes("-h") ? 0 : 2;
+  }
+  const first = Array.isArray(found) ? found[0] : found;
+  if (commands[word] && !first.via && KEEP.has(argv.slice(0, first.used).join(" "))) return null;
+  return doors.run(found, argv.slice(first.used), {
+    out: (s) => console.log(s), err: (s) => console.error(s),
+    origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,
+    readStdin: () => require("../lib/tools").readAll(),
+  });
+}
+
 (async () => {
+  const code = await door(process.argv.slice(2));
+  if (code !== null) { process.exitCode = code; return; }
   let opts;
   try { opts = parse(process.argv.slice(2)); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(2); }
   const cmd = opts._.shift();
   if (opts.version) return out(pkg.version);
   if (!cmd || opts.help || !commands[cmd]) {
     process.stdout.write(HELP);
-    process.exit(cmd && !commands[cmd] ? 1 : 0);
+    // The table's commands, as last fetched: --help never waits on the network.
+    const known = await require("../lib/doors").loadTable({ origin: cfg.origin(), configDir: cfg.configDir(), offline: true }).catch(() => null);
+    if (known) process.stdout.write(require("../lib/doors").tableHelp(known, cfg.origin()) + "\n");
+    process.exitCode = cmd && !commands[cmd] ? 1 : 0;
+    return;
   }
   try {
     await commands[cmd](opts);
