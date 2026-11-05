@@ -193,6 +193,10 @@ function parse(argv) {
   }
   return opts;
 }
+/** `list` and `versions <space>`, one line a row. A version's sha and name are `id` and
+ *  `label` on the new call. */
+const spaceLine = (s) => `${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`;
+const versionLine = (v) => `${(v.sha || v.id || "").slice(0, 12).padEnd(13)} ${(v.created_at || "").slice(0, 16).padEnd(17)} ${v.version_name || v.name || v.label || ""}`;
 const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
@@ -296,7 +300,7 @@ const commands = {
     const r = await client().call("list_spaces");
     const rows = Array.isArray(r) ? r : r.spaces || [];
     if (opts.json) return out(rows);
-    for (const s of rows) out(`${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`);
+    for (const s of rows) out(spaceLine(s));
   },
   async read(opts) {
     const [space, file] = opts._;
@@ -322,7 +326,7 @@ const commands = {
     const r = await client().call("list_versions", { uuid: opts._[0] });
     if (opts.json) return out(r);
     const rows = Array.isArray(r) ? r : r.versions || [];
-    for (const v of rows) out(`${(v.sha || "").slice(0, 12).padEnd(13)} ${(v.created_at || "").slice(0, 16).padEnd(17)} ${v.version_name || v.name || ""}`);
+    for (const v of rows) out(versionLine(v));
   },
   async share(opts) {
     if (!opts._[0]) throw new Error("usage: spacesheep share <space> [--visibility v] [--email a@b.c ...]");
@@ -484,8 +488,18 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // export -o DIR` writes the zip the new call links to into a folder (both on the new call,
 // newCall below). `deploy` reads the folder, uploads and pins it; `read -o` writes files;
 // `share` with --visibility and --email is two calls; `delete` asks at a terminal and
-// unpins the folder. `list` and `versions <space>` aren't here: the door runs them.
+// unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
+// prints today's one line a row (OLD_LINES).
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
+// Held too, on the new call: `talk on|off` write this machine's opt-in, and `talk` and `talk
+// status` say whether it's set. Apart from HELD, whose one-word names skip the table outright:
+// `talk reply` still runs on the door.
+const TALK_HERE = new Set(["talk", "talk status", "talk on", "talk off"]);
+// One line a row, as today's commands print them, for today's tools and the new calls alike.
+const OLD_LINES = new Map([
+  ["list", (a) => (a.spaces || []).map(spaceLine)],
+  ["versions", (a) => (a.versions || []).map(versionLine)],
+]);
 
 // The table door() fetched in this run (null: the server has none), or undefined when
 // door() didn't ask. newCall uses it as it came, not the cache file: a config dir that
@@ -541,11 +555,12 @@ async function door(argv) {
   }
   const first = Array.isArray(found) ? found[0] : found;
   const said = argv.slice(0, first.used).join(" ");
-  if (commands[word] && (HELD.has(said) || (SAME.has(said) && !first.via))) return null;
+  if (commands[word] && (HELD.has(said) || TALK_HERE.has(said) || (SAME.has(said) && !first.via))) return null;
   return doors.run(found, argv.slice(first.used), {
     out: (s) => console.log(s), err: (s) => console.error(s),
     origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,
     readStdin: () => require("../lib/tools").readAll(),
+    lines: OLD_LINES.get(said),
   });
 }
 

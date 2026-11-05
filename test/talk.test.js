@@ -169,8 +169,8 @@ test("talk listen: Talk off says so on the stopped line, from the new call or a 
   assert.deepEqual(await listener(SID, null, async () => ({ status: 403, error: { code: "forbidden", message: off, violations: [] } })), { stopped: off });
   // today's talk_listen, before it forwards
   assert.deepEqual(await listener(SID, async () => ({ enabled: false, reason: off }), async () => null), { stopped: off });
-  // talk_listen forwarded to the new call: its refusal is ErrorInfo in the tool error's text
-  const forwarded = async () => { throw Object.assign(new Error(JSON.stringify({ code: "forbidden", message: off, violations: [] }, null, 2)), { code: "ETOOL" }); };
+  // talk_listen forwarded to the new call: its refusal is ErrorInfo, on the tool error as lib/mcp.js throws it
+  const forwarded = async () => { throw Object.assign(new Error(off), { code: "ETOOL", info: { code: "forbidden", message: off, violations: [] } }); };
   assert.deepEqual(await listener(SID, forwarded, null), { stopped: off });
 });
 
@@ -186,7 +186,7 @@ test("talk listen: today's talk_listen where the new call isn't served, in eithe
 test("talk listen: a refused key exits 3 as today; any other refusal is an error, exit 1", async () => {
   await assert.rejects(listener(SID, null, async () => ({ status: 401, error: { code: "unauthenticated", message: "Unknown or revoked API key", violations: [] } })), (e) => e.code === "EAUTH");
   await assert.rejects(listener(SID, null, async () => ({ status: 429, error: { code: "rate_limited", message: "Slow down. Retry in 30s.", violations: [] } })), (e) => e.code !== "EAUTH" && /Retry in 30s/.test(e.message));
-  const other = async () => { throw Object.assign(new Error(JSON.stringify({ code: "invalid", message: "session: not yours" })), { code: "ETOOL" }); };
+  const other = async () => { throw Object.assign(new Error("session: not yours"), { code: "ETOOL", info: { code: "invalid", message: "session: not yours" } }); };
   await assert.rejects(listener(SID, other, null), /not yours/);
 });
 

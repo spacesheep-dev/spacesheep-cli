@@ -579,13 +579,13 @@ test("end to end: list and versions <space> run on the door; deploy, read, share
     assert.equal(list.code, 0, list.err);
     assert.equal(seen.at(-1).url, "/v1/spaces");
     assert.equal(seen.at(-1).auth, "Bearer ss_e2e");
-    assert.equal(list.out, "spaces:\n  - id: u1\n    title: Plan\n");
+    assert.equal(list.out, `·  ${"Plan".padEnd(42)} ${"".padEnd(10)} u1\n`);
     const json = await cli(["list", "--json"], env);
     assert.equal(json.out, '{"spaces":[{"id":"u1","title":"Plan"}],"page":{"next":""}}\n');
     const v = await cli(["versions", "@james/plan"], env);
     assert.equal(v.code, 0, v.err);
     assert.equal(seen.at(-1).url, "/v1/spaces/%40james%2Fplan/versions?space=%40james%2Fplan");
-    assert.equal(v.out, "versions:\n  - id: v1\n    label: first\n");
+    assert.equal(v.out, `${"v1".padEnd(13)} ${"".padEnd(17)} first\n`);
     assert.deepEqual(seen.filter((x) => x.url.startsWith("/mcp")), [], "the door's calls, not today's tools");
 
     // The held four on a fresh config: no table, no door call, straight to today's tools
@@ -599,5 +599,146 @@ test("end to end: list and versions <space> run on the door; deploy, read, share
       const urls = seen.slice(before).map((x) => x.url);
       assert.ok(urls.length && urls.every((u) => u.startsWith("/mcp")), `${args[0]} asked ${JSON.stringify(urls)}`);
     }
+  } finally { s.close(); }
+});
+
+test("today's list and versions <space> print today's one line a row; --json and the new commands keep theirs", async () => {
+  const space = { id: "u1", name: "@james/plan", title: "Plan", emoji: "📄", visibility: "private", url: "https://spacesheep.dev/@james/plan" };
+  const version = { id: "c21e11581f5b", label: "first", author: { name: "james" }, created_at: "2026-11-05T16:10:26.037Z" };
+  let spaces = JSON.stringify({ spaces: [space], page: { next: "" } });
+  const versions = JSON.stringify({ versions: [version], page: { next: "" } });
+  const { s, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE)];
+    if (req.url.startsWith("/v1/spaces/plan/versions")) return [200, versions];
+    if (req.url === "/v1/spaces") return [200, spaces];
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    assert.equal((await cli(["list"], env)).out, `📄 ${"Plan".padEnd(42)} ${"private".padEnd(10)} https://spacesheep.dev/@james/plan\n`);
+    assert.equal((await cli(["versions", "plan"], env)).out, `${"c21e11581f5b".padEnd(13)} ${"2026-11-05T16:10".padEnd(17)} first\n`);
+    assert.equal((await cli(["list", "--json"], env)).out, `${spaces}\n`);
+    assert.equal((await cli(["versions", "plan", "--json"], env)).out, `${versions}\n`);
+    assert.match((await cli(["spaces", "list"], env)).out, /^spaces:\n  - id: u1\n/);
+    assert.match((await cli(["versions", "list", "--space", "plan"], env)).out, /^versions:\n  - id: c21e11581f5b\n/);
+    // Nothing to list says nothing, as today.
+    spaces = '{"spaces":[],"page":{"next":""}}';
+    const none = await cli(["list"], env);
+    assert.deepEqual([none.code, none.out, none.err], [0, "", ""]);
+  } finally { s.close(); }
+});
+
+test("end to end: talk on and off write this machine's flag on the new call; talk and talk status say it", async () => {
+  let enabled = false;
+  const answer = () => ({ enabled, allowed: true, settings_url: "https://spacesheep.dev/settings" });
+  const { s, seen, origin } = await server((req, body) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE)];
+    if (req.url === "/v1/me/talkSettings") {
+      if (req.method === "PATCH") ({ enabled } = JSON.parse(body));
+      return [200, JSON.stringify({ talk_settings: answer() })];
+    }
+    if (req.method === "POST" && req.url === "/v1/me/talkMessages") return [200, '{"talk_message":{"id":"7"}}'];
+  });
+  const config = tmp();
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_KEY: "ss_test", SPACESHEEP_CONFIG_DIR: config, HOME: tmp() };
+  const flag = () => { try { return JSON.parse(fs.readFileSync(path.join(config, "config.json"), "utf8")).talk; } catch { return undefined; } };
+  const printed = async (args) => { const r = await cli(args, env); assert.equal(r.code, 0, `${args.join(" ")}: ${r.err}`); return JSON.parse(r.out); };
+  try {
+    assert.deepStrictEqual(await printed(["talk", "on"]), answer());
+    assert.equal(enabled, true);
+    assert.equal(flag(), true);
+    for (const args of [["talk"], ["talk", "status"]]) assert.deepStrictEqual(await printed(args), { ...answer(), this_machine: true });
+
+    assert.deepStrictEqual(await printed(["talk", "off"]), answer());
+    assert.equal(enabled, false);
+    assert.equal(flag(), undefined);
+    assert.deepStrictEqual(await printed(["talk", "status"]), { ...answer(), this_machine: false });
+
+    // What the line says wins over the word, and the flag follows what was sent.
+    await printed(["talk", "off", "--enabled=true"]);
+    assert.deepEqual([enabled, flag()], [true, true]);
+    await printed(["talk", "on", "--enabled", "false"]);
+    assert.deepEqual([enabled, flag()], [false, undefined]);
+    const bad = await cli(["talk", "on", "--enabled", "maybe"], env);
+    assert.equal(bad.code, 1);
+    assert.match(bad.err, /--enabled takes true or false/);
+    assert.equal(flag(), undefined);
+
+    // `talk reply` isn't held: it runs on the door.
+    assert.equal((await cli(["talk", "reply", "done", "--session", "s-1"], env)).code, 0);
+    assert.equal(seen.at(-1).url, "/v1/me/talkMessages");
+    assert.deepEqual(seen.filter((x) => x.url.startsWith("/mcp")), [], "the new calls, not today's tools");
+  } finally { s.close(); }
+});
+
+test("end to end: a refused talk on writes no flag, and a refused key exits 3", async () => {
+  let refusal = [403, '{"code":"forbidden","message":"Talking to sessions is part of Pro and Team.","violations":[]}'];
+  const { s, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE)];
+    if (req.url === "/v1/me/talkSettings") return refusal;
+  });
+  const config = tmp();
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_KEY: "ss_test", SPACESHEEP_CONFIG_DIR: config, HOME: tmp() };
+  try {
+    const off = await cli(["talk", "on"], env);
+    assert.equal(off.code, 1);
+    assert.match(off.err, /✗ Talking to sessions is part of Pro and Team\./);
+    assert.ok(!fs.existsSync(path.join(config, "config.json")), "no flag for a switch that didn't move");
+    refusal = [401, '{"code":"unauthenticated","message":"Unknown or revoked API key","violations":[]}'];
+    assert.equal((await cli(["talk", "on"], env)).code, 3);
+    assert.equal((await cli(["talk", "status"], env)).code, 3);
+  } finally { s.close(); }
+});
+
+/** One MCP exchange on a local server: `answer(name, args)` is a tool's whole result. */
+function mcpExchange(body, answer) {
+  const m = JSON.parse(body);
+  if (m.method === "notifications/initialized") return [202, ""];
+  if (m.method === "initialize") return [200, JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "test", version: "0" } } })];
+  return [200, JSON.stringify({ jsonrpc: "2.0", id: m.id, result: answer(m.params.name, m.params.arguments) })];
+}
+const toolError = (text) => ({ isError: true, content: [{ type: "text", text }] });
+
+test("end to end: where the server has no table, talk on and status use today's tool and still write the flag", async () => {
+  const calls = [];
+  const { s, origin } = await server((req, body) => {
+    if (req.url === "/mcp") return mcpExchange(body, (name, args) => { calls.push([name, args]); return { content: [{ type: "text", text: JSON.stringify({ enabled: true, allowed: true }) }] }; });
+  });
+  const config = tmp();
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_KEY: "ss_test", SPACESHEEP_CONFIG_DIR: config, HOME: tmp() };
+  try {
+    assert.deepEqual(JSON.parse((await cli(["talk", "on"], env)).out), { enabled: true, allowed: true });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(config, "config.json"), "utf8")).talk, true);
+    assert.deepEqual(JSON.parse((await cli(["talk", "status"], env)).out), { enabled: true, allowed: true, this_machine: true });
+    assert.deepEqual(calls, [["talk_settings", { enabled: true }], ["talk_settings", {}]]);
+  } finally { s.close(); }
+});
+
+test("end to end: a tool's refusal prints its sentence, in either server's words; talk listen still goes by its code", async () => {
+  let refusal;
+  const { s, origin } = await server((req, body) => {
+    if (req.url === "/mcp") return mcpExchange(body, () => toolError(refusal));
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_KEY: "ss_test", SPACESHEEP_CONFIG_DIR: tmp(), HOME: tmp() };
+  const said = async (text) => {
+    refusal = text;
+    const r = await cli(["read", "x"], env);
+    assert.equal(r.code, 1, text);
+    assert.ok(!r.err.includes('"code"'), r.err);
+    return r.err.trim();
+  };
+  try {
+    // ErrorInfo as the MCP door sends it (pretty-printed JSON), with what each violation adds.
+    assert.equal(await said(JSON.stringify({ code: "not_found", message: "No such space.", violations: [] }, null, 2)), "✗ No such space.");
+    assert.equal(await said(JSON.stringify({ code: "invalid", message: "Check the request.", violations: [{ field: "path", message: "at most 300 characters" }] }, null, 2)), "✗ Check the request.\n    path: at most 300 characters");
+    assert.equal(await said(JSON.stringify({ code: "invalid", message: "path: at most 300 characters", violations: [{ field: "path", message: "at most 300 characters" }] })), "✗ path: at most 300 characters");
+    // Today's tools: {error}, or plain words.
+    assert.equal(await said('{"error":"Space not found."}'), "✗ Space not found.");
+    assert.equal(await said("Space not found."), "✗ Space not found.");
+
+    // talk_listen forwarded to the new call: its forbidden is the stopped line, exit 0, through the real client.
+    refusal = JSON.stringify({ code: "forbidden", message: "Talking to sessions is part of Pro and Team.", violations: [] }, null, 2);
+    const listen = await cli(["talk", "listen", "--session", "s-1"], env);
+    assert.equal(listen.code, 0, listen.err);
+    assert.deepEqual(JSON.parse(listen.out), { spacesheep_talk: false, stopped: "Talking to sessions is part of Pro and Team." });
   } finally { s.close(); }
 });
