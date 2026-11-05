@@ -150,6 +150,73 @@ test("set: an empty value counts as left out, in a list too; a @ word only a loo
   assert.deepStrictEqual(await pick("crew flock --action remove --member @b"), ["team-members delete", { team: "flock", member: "@b" }]);
 });
 
+test("a form its `when` picked keeps its refusal in any flag order, by a flag or a word; no other form runs", async () => {
+  const text = (name) => ({ name, type: "text" });
+  const call = (command, inputs, replaces) => ({ noun: "T", cli: { command: `spacesheep ${command}`, usage: command, args: [], flags: inputs.map((d) => ({ input: d.name, flag: `--${d.name}`, type: d.type })), replaces }, inputs });
+  const table = { services: [{ methods: [
+    call("t delete", [text("team")], [{ command: "spacesheep crew", when: "action=remove", renamed: ["1=team"], set: [] }]),
+    // no `when`, and it takes everything: the one that would run if the refusal were lost
+    call("t list", [text("team"), text("action"), text("label")], [{ command: "spacesheep crew", when: "", renamed: ["1=team"], set: [] }]),
+    call("w get", [text("team"), text("file")], [{ command: "spacesheep rd", when: "2", renamed: ["1=team", "2=file"], set: [] }]),
+    call("w list", [text("team"), text("note"), text("label")], [{ command: "spacesheep rd", when: "", renamed: ["1=team", "2=note"], set: [] }]),
+  ] }] };
+  const run = async (line) => {
+    const argv = line.split(" "), found = doors.match(table, argv);
+    const { found: chosen, parsed } = await doors.resolve(found, argv.slice(found[0].used), { env: {} });
+    return [chosen.method.cli.command.replace("spacesheep ", ""), parsed.inputs];
+  };
+  const refused = (line) => assert.rejects(run(line), (e) => e.code === "EUSAGE" && /takes no --label/.test(e.message), line);
+  await refused("crew f --action remove --label z");
+  await refused("crew f --label z --action remove");
+  await refused("crew --label z f --action remove");
+  await refused("rd f a --label z");
+  await refused("rd f --label z a");
+  await refused("rd --label=z f a");
+  // not picked: the form with no `when` still takes the line, the flag's value not a word
+  assert.deepStrictEqual(await run("crew f --label z --action keep"), ["t list", { team: "f", label: "z", action: "keep" }]);
+  assert.deepStrictEqual(await run("rd f --label z"), ["w list", { team: "f", label: "z" }]);
+  // picked with nothing to refuse
+  assert.deepStrictEqual(await run("crew f --action remove"), ["t delete", { team: "f" }]);
+  assert.deepStrictEqual(await run("rd f a"), ["w get", { team: "f", file: "a" }]);
+});
+
+test("today's old commands: the same flags in either order run the same call", async () => {
+  const outcome = async (line) => {
+    try {
+      const argv = line.split(" "), found = doors.match(TABLE, argv), first = Array.isArray(found) ? found[0] : found;
+      const { found: chosen } = await doors.resolve(found, argv.slice(first.used), { env: {} });
+      return chosen.method.cli.command;
+    } catch (e) { assert.equal(e.code, "EUSAGE", line); return "refused"; }
+  };
+  const flags = ["--visibility public", "--email a@b.c", "--space s", "--message m", "--title t", "--limit 2", "--nope 1"];
+  let pairs = 0;
+  for (const start of ["share x", "deploy", "deploy d", "read x", "read x y", "talk on", "talk off"]) {
+    for (const a of flags) for (const b of flags) {
+      if (a >= b) continue;
+      pairs++;
+      assert.equal(await outcome(`${start} ${a} ${b}`), await outcome(`${start} ${b} ${a}`), `${start} ${a} ${b}`);
+    }
+  }
+  assert.equal(pairs, 147);
+});
+
+test("end to end: talk on and off send what the line says, over a real request", async () => {
+  const { s, seen, origin } = await server((req) => {
+    if (req.url.startsWith("/v1/doors.json")) return [200, JSON.stringify(TABLE)];
+    if (req.method === "PATCH") return [200, "{}"];
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_KEY: "ss_test", SPACESHEEP_CONFIG_DIR: tmp(), HOME: tmp() };
+  try {
+    for (const [args, enabled] of [[["talk", "on"], true], [["talk", "off"], false], [["talk", "on", "--enabled", "false"], false], [["talk", "off", "--enabled=true"], true]]) {
+      seen.length = 0;
+      assert.equal((await cli(args, env)).code, 0, args.join(" "));
+      const sent = seen.filter((r) => r.method === "PATCH");
+      assert.equal(sent.length, 1, args.join(" "));
+      assert.deepStrictEqual(JSON.parse(sent[0].body), { enabled }, args.join(" "));
+    }
+  } finally { s.close(); }
+});
+
 test("a session flag left out comes from the harness", async () => {
   const r = await request("talk-messages create --text hi", { CLAUDE_CODE_SESSION_ID: "11b51bc8" });
   assert.deepEqual(JSON.parse(r.body), { text: "hi", session: "11b51bc8" });
