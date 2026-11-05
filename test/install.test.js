@@ -230,8 +230,41 @@ test("bridge: relays JSON and SSE answers, carries the session, the version and 
     assert.strictEqual(later.authorization, "Bearer ss_test");
     assert.strictEqual(later["mcp-session-id"], "sess-1");
     assert.strictEqual(later["mcp-protocol-version"], "2025-06-18");
-    assert.match(later["user-agent"], /^spacesheep-mcp\/[\d.]+ \(codex\)$/);
+    assert.match(later["user-agent"], /^spacesheep-mcp\/[\d.]+ \(codex 1\)$/);
   } finally { server.close(); }
+});
+
+test("bridge: the harness's own name and version reach the server on every call", async () => {
+  // OpenCode 2.2.1 says clientInfo {name: "opencode", version: "2.2.1"}. The server
+  // never sees clientInfo on a tool call: the User-Agent is how a version or a post
+  // learns its agent, so it carries both, and the initialize itself goes on as sent.
+  const { server, seen, origin } = await standIn((req, res, msg) => {
+    if (msg.method === "initialize") {
+      res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "s" });
+      return res.end(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: "2025-06-18" } }));
+    }
+    if (!msg.id) { res.writeHead(202); return res.end(); }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }));
+  });
+  try {
+    const init = { ...INIT, params: { ...INIT.params, clientInfo: { name: "opencode", version: "2.2.1" } } };
+    const call = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "create_version", arguments: {} } };
+    await drive(origin, [init, { jsonrpc: "2.0", method: "notifications/initialized" }, call]);
+    assert.deepStrictEqual(seen[0].msg, init);
+    for (const s of seen) assert.match(s.headers["user-agent"], /^spacesheep-mcp\/[\d.]+ \(opencode 2\.2\.1\)$/);
+  } finally { server.close(); }
+});
+
+test("bridge: clientOf keeps the User-Agent one plain comment", () => {
+  const { clientOf } = require("../lib/bridge");
+  assert.strictEqual(clientOf({ name: "opencode", version: "2.2.1" }), "opencode 2.2.1");
+  assert.strictEqual(clientOf({ name: "codex-mcp-client", version: "0.50.0" }), "codex-mcp-client 0.50.0");
+  assert.strictEqual(clientOf({ name: "cursor" }), "cursor");
+  assert.strictEqual(clientOf({ version: "1.0" }), "");           // a version alone names nothing
+  assert.strictEqual(clientOf(undefined), "");
+  assert.strictEqual(clientOf({ name: "evil) (x", version: "1\r\nX-Injected: y" }), "evil x 1X-Injected y");
+  assert.strictEqual(clientOf({ name: "n".repeat(60), version: "v".repeat(30) }), `${"n".repeat(40)} ${"v".repeat(20)}`);
 });
 
 test("bridge: a forgotten session is started again and the call retried", async () => {
