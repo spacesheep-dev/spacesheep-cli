@@ -478,11 +478,14 @@ const commands = {
 // command replaces them (a `replaces` entry with their own name): then the door runs the
 // table's, with today's flags mapped by that entry (`--offset` → after).
 const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
-// Today's commands that stay here even where the table replaces them, built on the new
-// call (newCall below): each is more than one request. `talk listen` keeps polling the
-// link `talk-listeners create` answers, and Pointman reads every line it prints;
-// `sessions export -o DIR` writes the zip the new call links to into a folder.
-const HELD = new Set(["talk listen", "sessions export"]);
+// Today's commands that stay here even where the table replaces them: each is more than
+// one request, or does work at this end. `talk listen` keeps polling the link
+// `talk-listeners create` answers, and Pointman reads every line it prints; `sessions
+// export -o DIR` writes the zip the new call links to into a folder (both on the new call,
+// newCall below). `deploy` reads the folder, uploads and pins it; `read -o` writes files;
+// `share` with --visibility and --email is two calls; `delete` asks at a terminal and
+// unpins the folder. `list` and `versions <space>` aren't here: the door runs them.
+const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
 
 // The table door() fetched in this run (null: the server has none), or undefined when
 // door() didn't ask. newCall uses it as it came, not the cache file: a config dir that
@@ -514,6 +517,7 @@ async function newCall(command, inputs) {
 async function door(argv) {
   const word = argv[0];
   if (!word || word.startsWith("-")) return null;
+  if (commands[word] && HELD.has(word)) return null;   // held whatever the table says: no request for it
   const doors = require("../lib/doors");
   const where = { origin: cfg.origin(), configDir: cfg.configDir() };
   let table;

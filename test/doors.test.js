@@ -1,7 +1,9 @@
 "use strict";
 // The generic door: the doors table → the command line → the request, and back.
-// test/fixtures/doors.json is 16 calls cut from the server's shared/doors.json (sessions
-// list, get and export from ssapi/picks 283cd22b, which says they replace today's three).
+// test/fixtures/doors.json is 23 calls cut from the server's shared/doors.json (sessions
+// list, get and export from ssapi/picks 283cd22b, which says they replace today's three;
+// spaces list/create/share/delete, versions create and files list/get from ssapi/picks
+// 674b4413, with the replaces lines it gave spaces update and versions list too).
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -239,7 +241,7 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     assert.equal(verbs.code, 2);
     assert.match(verbs.out, /spacesheep spaces get <space>/);
     const top = await cli(["--help"], env);
-    assert.match(top.out, /From the server .*\n(.*\n)*\s+spacesheep spaces\s+get, update, screenshot/);
+    assert.match(top.out, /From the server .*\n(.*\n)*\s+spacesheep spaces\s+get, update, list, create, share, delete, screenshot/);
   } finally { s.close(); }
 });
 
@@ -378,7 +380,7 @@ test("a command that replaces today's of the same name: today's flags map, its o
 test("today's commands the table names: here until it replaces them; talk listen and sessions export stay", async () => {
   const src = fs.readFileSync(path.join(__dirname, "..", "bin", "spacesheep.js"), "utf8");
   assert.match(src, /SAME = new Set\(\["sessions list", "sessions get", "sessions export"\]\)/);
-  assert.match(src, /HELD = new Set\(\["talk listen", "sessions export"\]\)/);
+  assert.match(src, /HELD = new Set\(\["talk listen", "sessions export", "deploy", "read", "share", "delete"\]\)/);
   assert.match(src, /HELD\.has\(said\) \|\| \(SAME\.has\(said\) && !first\.via\)/);
   // `talk listen` comes in by an old name; HELD keeps it here, on the new call.
   assert.ok(doors.match(TABLE, ["talk", "listen"])[0].via);
@@ -405,5 +407,63 @@ test("end to end: sessions list goes to the door once the table replaces it, and
     const before = seen.length;
     await cli(["sessions", "list", "--offset", "5"], env2);
     assert.ok(seen.slice(before).every((x) => !x.url.startsWith("/v1/me/sessions")), "today's, not the door's");
+  } finally { s.close(); }
+});
+
+test("today's list and versions <space> come in by the table's new lines; versions list|create stay the new commands", async () => {
+  // ssapi/picks 674b4413: list → spaces list, versions <space> → versions list (1=space).
+  const list = doors.match(TABLE, ["list"]);
+  assert.equal(list[0].method.cli.command, "spacesheep spaces list");
+  assert.equal(list[0].via.command, "spacesheep list");
+  assert.equal((await request("list")).url, `${ORIGIN}/v1/spaces`);
+  assert.equal((await request("list --include-archived")).url, `${ORIGIN}/v1/spaces?include_archived=true`);
+  const v = await request("versions @james/plan --limit 3");
+  assert.equal(v.method, "GET");
+  assert.equal(v.url, `${ORIGIN}/v1/spaces/%40james%2Fplan/versions?limit=3&space=%40james%2Fplan`);
+  await usage("versions", /spacesheep versions needs <space>/);
+  // `versions list` and `versions create` are the new commands, never a space called "list".
+  const vl = doors.match(TABLE, ["versions", "list", "--space", "x"]);
+  assert.equal(vl.method.cli.command, "spacesheep versions list");
+  assert.equal(vl.via, null);
+  assert.equal(doors.match(TABLE, ["versions", "create", "--space", "x"]).method.cli.command, "spacesheep versions create");
+  assert.equal((await request("versions list --space x")).url, `${ORIGIN}/v1/spaces/x/versions?space=x`);
+  assert.deepStrictEqual(JSON.parse((await request("versions create --space x --label v2")).body), { space: "x", label: "v2" });
+  await usage("versions list", /versions list needs --space or --space-id/);
+  // The four that stay hand-written are named too: the CLI holds them (HELD), not the table.
+  for (const w of ["deploy", "read", "share", "delete"]) assert.ok(doors.match(TABLE, [w, "x"]), `${w} is in the table`);
+});
+
+test("end to end: list and versions <space> run on the door; deploy, read, share and delete stay today's", async () => {
+  const { s, seen, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE), { ETag: '"t3"' }];
+    if (req.method === "GET" && req.url === "/v1/spaces") return [200, '{"spaces":[{"id":"u1","title":"Plan"}],"page":{"next":""}}'];
+    if (req.method === "GET" && req.url.startsWith("/v1/spaces/%40james%2Fplan/versions")) return [200, '{"versions":[{"id":"v1","label":"first"}],"page":{"next":""}}'];
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const list = await cli(["list"], env);
+    assert.equal(list.code, 0, list.err);
+    assert.equal(seen.at(-1).url, "/v1/spaces");
+    assert.equal(seen.at(-1).auth, "Bearer ss_e2e");
+    assert.equal(list.out, "spaces:\n  - id: u1\n    title: Plan\n");
+    const json = await cli(["list", "--json"], env);
+    assert.equal(json.out, '{"spaces":[{"id":"u1","title":"Plan"}],"page":{"next":""}}\n');
+    const v = await cli(["versions", "@james/plan"], env);
+    assert.equal(v.code, 0, v.err);
+    assert.equal(seen.at(-1).url, "/v1/spaces/%40james%2Fplan/versions?space=%40james%2Fplan");
+    assert.equal(v.out, "versions:\n  - id: v1\n    label: first\n");
+    assert.deepEqual(seen.filter((x) => x.url.startsWith("/mcp")), [], "the door's calls, not today's tools");
+
+    // The held four on a fresh config: no table, no door call, straight to today's tools
+    // (this server has no MCP, so each fails there, at exit 1 rather than the door's 2).
+    const site = tmp();
+    fs.writeFileSync(path.join(site, "index.html"), "<h1>hi</h1>");
+    for (const args of [["deploy", site], ["read", "x"], ["read", "x", "index.html", "-o", tmp()], ["share", "x", "--visibility", "public"], ["delete", "x", "--yes"]]) {
+      const before = seen.length;
+      const r = await cli(args, { ...env, SPACESHEEP_CONFIG_DIR: tmp() });
+      assert.equal(r.code, 1, `${args.join(" ")}: ${r.err}`);
+      const urls = seen.slice(before).map((x) => x.url);
+      assert.ok(urls.length && urls.every((u) => u.startsWith("/mcp")), `${args[0]} asked ${JSON.stringify(urls)}`);
+    }
   } finally { s.close(); }
 });
