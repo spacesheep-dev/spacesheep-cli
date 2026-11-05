@@ -555,7 +555,8 @@ async function door(argv) {
   }
   const first = Array.isArray(found) ? found[0] : found;
   const said = argv.slice(0, first.used).join(" ");
-  if (commands[word] && (HELD.has(said) || TALK_HERE.has(said) || (SAME.has(said) && !first.via))) return null;
+  if (commands[word] && TALK_HERE.has(said)) return null;
+  if (commands[word] && (HELD.has(said) || (SAME.has(said) && !first.via))) return null;
   return doors.run(found, argv.slice(first.used), {
     out: (s) => console.log(s), err: (s) => console.error(s),
     origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,
