@@ -381,7 +381,7 @@ const commands = {
     out(await client().call("submit_feedback", args));
   },
   async talk(opts) {
-    return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log);
+    return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log, newCall);
   },
   async machine(opts) {
     const mc = require("../lib/machine");
@@ -457,7 +457,7 @@ const commands = {
   },
   async sessions(opts) {
     const subcommand = opts._[0];
-    if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out);
+    if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out, undefined, newCall);
     if (subcommand === "list" || subcommand === "get") {
       const args = require("../lib/inspection").sessionArgs(opts);
       return out(await client().call(subcommand === "list" ? "list_sessions" : "get_session", args));
@@ -474,11 +474,28 @@ const commands = {
   },
 };
 
-// Today's commands that keep running here whatever the doors table says. `sessions …`:
-// the table names them without a `replaces` (today's `export -o DIR` writes files).
-// `talk listen`: the table replaces it with one create call, but today's keeps polling
-// and takes --once. Both are open questions on the table, not the CLI's to settle.
-const KEEP = new Set(["sessions list", "sessions get", "sessions export", "talk listen"]);
+// Today's commands the doors table names too. They run here until the table says its
+// command replaces them (a `replaces` entry with their own name): then the door runs the
+// table's, with today's flags mapped by that entry (`--offset` → after).
+const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
+// Today's commands that stay here even where the table replaces them, built on the new
+// call (newCall below): each is more than one request. `talk listen` keeps polling the
+// link `talk-listeners create` answers, and Pointman reads every line it prints;
+// `sessions export -o DIR` writes the zip the new call links to into a folder.
+const HELD = new Set(["talk listen", "sessions export"]);
+
+/** A call of the table's by its command (`talk-listeners create`), for the HELD commands:
+ *  null when this server's table (as door() just fetched it) doesn't have it yet, and then
+ *  today's MCP tool runs instead. */
+async function newCall(command, inputs) {
+  const doors = require("../lib/doors");
+  const table = await doors.loadTable({ origin: cfg.origin(), configDir: cfg.configDir(), offline: true }).catch(() => null);
+  if (!table) return null;
+  return doors.call(table, command, inputs, {
+    origin: cfg.origin(), version: pkg.version,
+    key: () => { const k = cfg.resolveKey(); if (!k) throw Object.assign(new Error("not signed in — run `spacesheep login` (or set SPACESHEEP_KEY)"), { code: "EAUTH" }); return k.key; },
+  });
+}
 
 /** `spacesheep <noun> <verb>` from the server's doors table (lib/doors.js). Resolves
  *  the exit code, or null for a command line the table doesn't take: then today's
@@ -512,7 +529,8 @@ async function door(argv) {
     return argv.includes("--help") || argv.includes("-h") ? 0 : 2;
   }
   const first = Array.isArray(found) ? found[0] : found;
-  if (commands[word] && KEEP.has(argv.slice(0, first.used).join(" "))) return null;
+  const said = argv.slice(0, first.used).join(" ");
+  if (commands[word] && (HELD.has(said) || (SAME.has(said) && !first.via))) return null;
   return doors.run(found, argv.slice(first.used), {
     out: (s) => console.log(s), err: (s) => console.error(s),
     origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,

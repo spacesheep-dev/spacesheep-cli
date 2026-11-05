@@ -332,10 +332,107 @@
       "agent"
      ],
      "machine_tokens": [],
+     "mcp": {
+      "name": "list_sessions",
+      "title": "List sessions",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 70,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "after": {
+         "type": "string",
+         "description": "Where to start: the last page's `next`. The first page when left out. (text)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 200,
+         "description": "How many at most; 50 when left out, for every list. (integer; 1 to 200)"
+        },
+        "source": {
+         "type": "string",
+         "description": "Only this harness's: claude-code, codex. (text)"
+        },
+        "state": {
+         "type": "string",
+         "enum": [
+          "working",
+          "needs_you",
+          "idle",
+          "done"
+         ],
+         "description": "Only sessions in this state. (one of working, needs_you, idle, done)"
+        },
+        "machine": {
+         "type": "string",
+         "description": "Only this computer's. (text)"
+        },
+        "since": {
+         "type": "string",
+         "description": "Only sessions active since then. (time)"
+        }
+       },
+       "additionalProperties": false,
+       "required": []
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "sessions": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "title": {
+            "type": "string"
+           },
+           "machine": {
+            "type": "string"
+           },
+           "last_at": {
+            "type": "string",
+            "format": "date-time"
+           }
+          }
+         }
+        },
+        "page": {
+         "type": "object",
+         "properties": {
+          "next": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
      "cli": {
       "command": "spacesheep sessions list",
       "usage": "spacesheep sessions list [flags]",
-      "replaces": [],
+      "replaces": [
+       {
+        "command": "spacesheep sessions list",
+        "when": null,
+        "renamed": [
+         "offset=after"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
       "args": [],
       "flags": [
        {
@@ -472,6 +569,251 @@
    "service": "SessionDetailService",
    "methods": [
     {
+     "method": "GetSession",
+     "service": "SessionDetailService",
+     "doc": "One of your coding sessions: its state changes, tool calls, kept turns, spaces it published and its share.",
+     "verb": "Get",
+     "noun": "Session",
+     "http": "GET",
+     "path": "/v1/me/sessions/{session.id}",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "get_session",
+      "title": "Get session",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 106,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "session": {
+         "type": "string",
+         "description": "Your session: its id, bare or as source:id, from the list of sessions. (session id)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 100,
+         "description": "How many recent entries of each kind; 20 when left out. (integer; 0 to 100)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "session"
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "session": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "title": {
+           "type": "string"
+          },
+          "machine": {
+           "type": "string"
+          },
+          "last_at": {
+           "type": "string",
+           "format": "date-time"
+          }
+         }
+        },
+        "events": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "what": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "turns": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "role": {
+            "type": "string"
+           },
+           "text": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "spaces": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "space": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           },
+           "url": {
+            "type": "string"
+           },
+           "versions": {
+            "type": "integer"
+           },
+           "first_at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "last_at": {
+            "type": "string",
+            "format": "date-time"
+           }
+          }
+         }
+        },
+        "share": {
+         "type": "object",
+         "properties": {
+          "url": {
+           "type": "string"
+          },
+          "access": {
+           "type": "string"
+          },
+          "team": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "people": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep sessions get",
+      "usage": "spacesheep sessions get <session> [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep sessions get",
+        "when": null,
+        "renamed": [
+         "1=session",
+         "source="
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "session"
+      ],
+      "flags": [
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many recent entries of each kind; 20 when left out.",
+        "limits": [
+         "0 to 100"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "session_id=session",
+      "source="
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "session",
+       "type": "session id",
+       "required": true,
+       "doc": "Your session: its id, bare or as source:id, from the list of sessions.",
+       "limits": [],
+       "at": [
+        "session"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many recent entries of each kind; 20 when left out.",
+       "limits": [
+        "0 to 100"
+       ],
+       "range": {
+        "min": 0,
+        "max": 100
+       },
+       "at": [
+        "limit"
+       ]
+      }
+     ],
+     "response": "GetSessionResponse"
+    },
+    {
      "method": "ExportSessions",
      "service": "SessionDetailService",
      "doc": "Every one of your coding sessions, complete, as one zip: a secret download link for an hour.",
@@ -487,10 +829,58 @@
       "agent"
      ],
      "machine_tokens": [],
+     "mcp": {
+      "name": "export_sessions",
+      "title": "Export sessions",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 92,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "since": {
+         "type": "string",
+         "description": "Only sessions active since then, for an incremental backup. Every session when left out. (time)"
+        }
+       },
+       "additionalProperties": false,
+       "required": []
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "download_url": {
+         "type": "string"
+        },
+        "curl_command": {
+         "type": "string"
+        },
+        "expires_at": {
+         "type": "string",
+         "format": "date-time"
+        }
+       }
+      }
+     },
      "cli": {
       "command": "spacesheep sessions export",
       "usage": "spacesheep sessions export [flags]",
-      "replaces": [],
+      "replaces": [
+       {
+        "command": "spacesheep sessions export",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       }
+      ],
       "args": [],
       "flags": [
        {

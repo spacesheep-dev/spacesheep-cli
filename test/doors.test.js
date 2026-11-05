@@ -1,6 +1,7 @@
 "use strict";
 // The generic door: the doors table → the command line → the request, and back.
-// test/fixtures/doors.json is 15 calls cut from the server's shared/doors.json.
+// test/fixtures/doors.json is 16 calls cut from the server's shared/doors.json (sessions
+// list, get and export from ssapi/picks 283cd22b, which says they replace today's three).
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -181,6 +182,11 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     if (req.method === "GET" && req.url === "/v1/me") return [200, '{"account":{"handle":"james","plan":"pro"}}'];
     if (req.method === "PATCH" && req.url.startsWith("/v1/spaces/")) return [400, '{"code":"invalid","message":"Check the title.","violations":[{"field":"title","message":"at most 200 characters"}]}'];
     if (req.method === "POST" && req.url === "/v1/me/talkMessages") return [200, '{"talk_message":{"id":"13"}}'];
+    if (req.method === "POST" && req.url === "/v1/me/talkListeners") {
+      const link = `http://${req.headers.host}/api/talk/listen/sst_${"a".repeat(43)}`;
+      return [200, JSON.stringify({ talk_listener: { id: "l1", session: { id: "s-1" }, monitor_command: `while :; do curl -sS '${link}?by=agent'; done` } })];
+    }
+    if (req.method === "GET" && req.url.startsWith("/api/talk/listen/sst_")) return [200, '{"id":7,"text":"hello"}\n'];
     if (req.method === "GET" && req.url.startsWith("/v1/spaces/")) return [400, '{"code":"invalid","message":"size: takes a whole number","violations":[{"field":"size","message":"takes a whole number"},{"field":"path","message":"is required"}]}'];
   });
   const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
@@ -214,9 +220,16 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     assert.equal(reply.code, 0, reply.err);
     assert.deepStrictEqual(JSON.parse(seen.at(-1).body), { text: "done", reply_to: "12", session: "s-1" });
 
-    // `talk listen` keeps today's polling loop: the door never sends its create call.
-    await cli(["talk", "listen", "--once", "--session", "s-1"], env);
-    assert.ok(!seen.some((x) => x.url.startsWith("/v1/me/talkListeners")));
+    // `talk listen` keeps today's loop, now on the new call: one create, then it polls
+    // the link that answers, printing each message line as it came.
+    const listen = await cli(["talk", "listen", "--once", "--session", "s-1"], env);
+    assert.equal(listen.code, 0, listen.err);
+    assert.equal(listen.out, '{"id":7,"text":"hello"}\n');
+    const minted = seen.filter((x) => x.url === "/v1/me/talkListeners");
+    assert.equal(minted.length, 1);
+    assert.deepStrictEqual(JSON.parse(minted[0].body), { session: "s-1" });
+    assert.equal(minted[0].auth, "Bearer ss_e2e");
+    assert.ok(seen.some((x) => x.url === `/api/talk/listen/sst_${"a".repeat(43)}`), "polled bare, as today");
 
     const help = await cli(["spaces", "update", "--help"], env);
     assert.equal(help.code, 0);
@@ -288,12 +301,53 @@ test("end to end: with no answer from the server, today's command waits only the
   } finally { s.closeAllConnections(); s.close(); }
 });
 
-test("today's commands kept here whatever the table says", async () => {
-  // `sessions export -o DIR` writes files; the table's `sessions export` is one call.
-  const found = doors.match(TABLE, ["sessions", "export"]);
-  assert.ok(found && !found.via);
-  // `talk listen` polls and takes --once; the table's replacement is one create call.
-  assert.ok(doors.match(TABLE, ["talk", "listen"])[0].via);
+test("a command that replaces today's of the same name: today's flags map, its own work too", async () => {
+  // ssapi/picks 283cd22b: sessions list|get|export each replace today's command of that name.
+  const found = doors.match(TABLE, ["sessions", "list"]);
+  assert.ok(found.via && found.via.command === "spacesheep sessions list");
+  assert.equal((await request("sessions list --offset 5 --state done")).url, `${ORIGIN}/v1/me/sessions?after=5&state=done`);
+  assert.equal((await request("sessions list --since 1730000000000")).url, `${ORIGIN}/v1/me/sessions?since=1730000000000`);
+  assert.equal((await request("sessions list --after 5 --limit 3")).url, `${ORIGIN}/v1/me/sessions?after=5&limit=3`);
+  // today's `get <id> --source codex`: word 1 is the session, --source is dropped
+  assert.equal((await request("sessions get 019a-77 --source codex --limit 4")).url, `${ORIGIN}/v1/me/sessions/019a-77?limit=4`);
+  assert.equal((await request("sessions get codex:019a-77")).url, `${ORIGIN}/v1/me/sessions/codex%3A019a-77`);
+  await usage("sessions list --zip x.zip", /sessions list takes no --zip/);
+  // its help is its own: no "(spacesheep sessions list runs this)" for itself
+  const help = doors.helpFor(found);
+  assert.match(help, /spacesheep sessions list \[flags\]/);
+  assert.doesNotMatch(help, /runs this/);
+  assert.doesNotMatch(help, /→/);
+});
+
+test("today's commands the table names: here until it replaces them; talk listen and sessions export stay", async () => {
   const src = fs.readFileSync(path.join(__dirname, "..", "bin", "spacesheep.js"), "utf8");
-  assert.match(src, /KEEP = new Set\(\["sessions list", "sessions get", "sessions export", "talk listen"\]\)/);
+  assert.match(src, /SAME = new Set\(\["sessions list", "sessions get", "sessions export"\]\)/);
+  assert.match(src, /HELD = new Set\(\["talk listen", "sessions export"\]\)/);
+  assert.match(src, /HELD\.has\(said\) \|\| \(SAME\.has\(said\) && !first\.via\)/);
+  // `talk listen` comes in by an old name; HELD keeps it here, on the new call.
+  assert.ok(doors.match(TABLE, ["talk", "listen"])[0].via);
+});
+
+test("end to end: sessions list goes to the door once the table replaces it, and stays here until then", async () => {
+  const noReplace = JSON.parse(JSON.stringify(TABLE));
+  for (const svc of noReplace.services) for (const m of svc.methods) if (/^Sessions?$/.test(m.noun)) m.cli.replaces = [];
+  let table = TABLE;
+  const { s, seen, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(table)];
+    if (req.method === "GET" && req.url.startsWith("/v1/me/sessions")) return [200, '{"sessions":[{"id":"s1","title":"Plan","machine":"mac"}],"page":{"next":""}}'];
+  });
+  try {
+    const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+    const r = await cli(["sessions", "list", "--offset", "5"], env);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(seen.at(-1).url, "/v1/me/sessions?after=5");
+    assert.equal(r.out, "sessions:\n  - id: s1\n    title: Plan\n    machine: mac\n");
+
+    // A table that names it without replacing it: today's command runs (over MCP here).
+    table = noReplace;
+    const env2 = { ...env, SPACESHEEP_CONFIG_DIR: tmp() };
+    const before = seen.length;
+    await cli(["sessions", "list", "--offset", "5"], env2);
+    assert.ok(seen.slice(before).every((x) => !x.url.startsWith("/v1/me/sessions")), "today's, not the door's");
+  } finally { s.close(); }
 });

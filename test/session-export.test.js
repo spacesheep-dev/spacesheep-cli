@@ -68,3 +68,23 @@ test("a failed download or an old server says so", async () => {
   await assert.rejects(run({ _: ["export"] }, async () => "no", () => {}, () => {}, fakeFetch(archive)), /did not return an export link/);
   assert.throws(() => exportArgs({ _: ["export"], since: "yesterday" }), /Unix milliseconds/);
 });
+
+test("the link comes from the new call where the server serves it; the files are written as before", async () => {
+  // ssapi/picks says the table's `sessions export` replaces this command; this one still writes the files.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-export-new-"));
+  const sent = [], lines = [];
+  const door = async (command, inputs) => { sent.push([command, inputs]); return { status: 200, answer: { download_url: "https://spacesheep.dev/api/sessions/export/sse_y", curl_command: "curl …", expires_at: "2026-11-05T12:00:00Z" } }; };
+  const mcp = async () => { throw new Error("export_sessions isn't asked"); };
+  await run({ _: ["export"], out: dir, since: "1790000000000" }, mcp, (l) => lines.push(l), () => {}, fakeFetch(archive), door);
+  assert.deepEqual(sent, [["sessions export", { since: 1790000000000 }]]);
+  assert.ok(fs.existsSync(path.join(dir, "sessions", "claude-code", "2026-09-29-abc.md")));
+  // the new answer has no counts: it says so without inventing them
+  assert.match(lines[0], /^Exported your sessions \(active since 2026-09-21T.*\) to .*sessions \(3 files\)$/);
+  // not served yet: today's export_sessions
+  const calls = [];
+  await run({ _: ["export"], out: dir }, async (name, args) => { calls.push([name, args]); return { download_url: "u", sessions: 1, included: 1 }; }, () => {}, () => {}, fakeFetch(archive), async () => null);
+  assert.deepEqual(calls, [["export_sessions", {}]]);
+  // a refusal from the new call is an error; a refused key exits 3
+  await assert.rejects(run({ _: ["export"] }, mcp, () => {}, () => {}, fakeFetch(archive), async () => ({ status: 503, error: { code: "unavailable", message: "Try again soon." } })), /Try again soon/);
+  await assert.rejects(run({ _: ["export"] }, mcp, () => {}, () => {}, fakeFetch(archive), async () => ({ status: 401, error: { code: "unauthenticated", message: "no" } })), (e) => e.code === "EAUTH");
+});
