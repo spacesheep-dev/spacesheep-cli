@@ -484,12 +484,19 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // `sessions export -o DIR` writes the zip the new call links to into a folder.
 const HELD = new Set(["talk listen", "sessions export"]);
 
+// The table door() fetched in this run (null: the server has none), or undefined when
+// door() didn't ask. newCall uses it as it came, not the cache file: a config dir that
+// can't be written never holds it, and a cached copy can be older than the server's.
+let fetched;
+
 /** A call of the table's by its command (`talk-listeners create`), for the HELD commands:
- *  null when this server's table (as door() just fetched it) doesn't have it yet, and then
- *  today's MCP tool runs instead. */
+ *  null when this server's table doesn't have it yet, and then today's MCP tool runs
+ *  instead. The table is the one door() just fetched; where door() didn't ask (a cached
+ *  table that doesn't name the word), it's fetched here, once. */
 async function newCall(command, inputs) {
   const doors = require("../lib/doors");
-  const table = await doors.loadTable({ origin: cfg.origin(), configDir: cfg.configDir(), offline: true }).catch(() => null);
+  if (fetched === undefined) fetched = await doors.loadTable({ origin: cfg.origin(), configDir: cfg.configDir() }).catch(() => null);
+  const table = fetched;
   if (!table) return null;
   return doors.call(table, command, inputs, {
     origin: cfg.origin(), version: pkg.version,
@@ -517,7 +524,7 @@ async function door(argv) {
       if (known && !doors.namesWord(known, word)) return null;
       probe = !known;
     }
-    table = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT } : where);
+    table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT } : where);
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
   if (!table) return null;
   const found = doors.match(table, argv);

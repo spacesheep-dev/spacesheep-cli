@@ -301,6 +301,62 @@ test("end to end: with no answer from the server, today's command waits only the
   } finally { s.closeAllConnections(); s.close(); }
 });
 
+// A server with the new calls and no MCP: any fall-back to today's tools is a 404 here.
+function newCallsOnly() {
+  return server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(TABLE), { ETag: '"t2"' }];
+    if (req.method === "POST" && req.url === "/v1/me/talkListeners") {
+      const link = `http://${req.headers.host}/api/talk/listen/sst_${"b".repeat(43)}`;
+      return [200, JSON.stringify({ talk_listener: { id: "l2", session: { id: "s-2" }, monitor_command: `while :; do curl -sS '${link}?by=agent'; done` } })];
+    }
+    if (req.method === "GET" && req.url.startsWith("/api/talk/listen/sst_")) return [200, '{"id":8,"text":"hi"}\n'];
+    if (req.method === "GET" && req.url.startsWith("/v1/me/sessions:export")) return [200, JSON.stringify({ download_url: `http://${req.headers.host}/dl/sse_z`, curl_command: "curl …", expires_at: "2026-11-05T12:00:00Z" })];
+    if (req.method === "GET" && req.url === "/dl/sse_z") return [200, "zip-bytes"];
+  });
+}
+async function heldOnNewCalls(env, seen, before = () => {}) {
+  before();
+  const listen = await cli(["talk", "listen", "--once", "--session", "s-2"], env);
+  assert.equal(listen.code, 0, listen.err);
+  assert.equal(listen.out, '{"id":8,"text":"hi"}\n');
+  assert.equal(seen.filter((x) => x.url === "/v1/me/talkListeners").length, 1);
+  const zip = path.join(tmp(), "s.zip");
+  before();
+  const ex = await cli(["sessions", "export", "--zip", zip], env);
+  assert.equal(ex.code, 0, ex.err);
+  assert.equal(fs.readFileSync(zip, "utf8"), "zip-bytes");
+  assert.ok(seen.some((x) => x.url.startsWith("/v1/me/sessions:export")), "export's link from the new call");
+  assert.deepEqual(seen.filter((x) => x.url.startsWith("/mcp")), [], "no fall-back to today's tools");
+}
+
+test("end to end: talk listen and sessions export use the table just fetched, where it can't be cached", async () => {
+  const { s, seen, origin } = await newCallsOnly();
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "doors"), "");   // a file where the cache folder goes: every write fails
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: dir, SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    await heldOnNewCalls(env, seen);
+    assert.ok(!fs.existsSync(doors.cachePath(dir, origin)), "nothing was cached");
+  } finally { s.close(); }
+});
+
+test("end to end: a cached table older than the server's doesn't hide the new calls", async () => {
+  // Cached before the server had Talk or sessions: door() leaves `talk` and `sessions` to today's
+  // commands without asking, so the new call fetches the table itself.
+  const { s, seen, origin } = await newCallsOnly();
+  const dir = tmp();
+  const named = (m) => [m.cli && m.cli.command, ...((m.cli && m.cli.replaces) || []).map((r) => r.command)].some((c) => /^spacesheep (talk|sessions)\b/.test(c || ""));
+  const old = { ...TABLE, services: TABLE.services.map((sv) => ({ ...sv, methods: (sv.methods || []).filter((m) => !named(m)) })) };
+  assert.ok(!doors.namesWord(old, "talk") && !doors.namesWord(old, "sessions"));
+  fs.mkdirSync(path.join(dir, "doors"));
+  // Before each command: the old table again (the one before it fetched and cached the new one).
+  const stale = () => fs.writeFileSync(doors.cachePath(dir, origin), JSON.stringify({ origin, etag: '"t1"', fetched_at: Date.now(), table: old }));
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: dir, SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    await heldOnNewCalls(env, seen, stale);
+  } finally { s.close(); }
+});
+
 test("a command that replaces today's of the same name: today's flags map, its own work too", async () => {
   // ssapi/picks 283cd22b: sessions list|get|export each replace today's command of that name.
   const found = doors.match(TABLE, ["sessions", "list"]);
