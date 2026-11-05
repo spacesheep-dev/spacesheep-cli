@@ -83,6 +83,73 @@ test("old names keep working: talk reply <text> --to N, talk on, bare talk", asy
   assert.equal((await request("talk status")).url, `${ORIGIN}/v1/me/talkSettings`);
 });
 
+test("set fills what an old command left out; a value it gave stays", async () => {
+  assert.deepStrictEqual(JSON.parse((await request("talk on")).body), { enabled: true });
+  assert.deepStrictEqual(JSON.parse((await request("talk on --enabled false")).body), { enabled: false });
+  assert.deepStrictEqual(JSON.parse((await request("talk off --enabled=true")).body), { enabled: true });
+});
+
+/** An old command with the forms the MCP door's forwards use: picked by value, by a flag, or neither. */
+function oldForms() {
+  const call = (command, inputs, replaces) => ({
+    noun: "Team", cli: { command: `spacesheep ${command}`, usage: command, args: [], flags: inputs.map((d) => ({ input: d.name, flag: `--${d.name.replace(/_/g, "-")}`, type: d.type })), replaces },
+    inputs,
+  });
+  const member = { name: "member", type: "text" }, team = { name: "team", type: "text" }, role = { name: "role", type: "text" };
+  const action = { name: "action", type: "text" }, labels = { name: "labels", type: "list of text" };
+  return { services: [{ methods: [
+    call("team-members create", [team, member, role], [{ command: "spacesheep crew", when: "action=add", renamed: ["1=team"], set: ["role=member"] }]),
+    call("team-members delete", [team, member], [{ command: "spacesheep crew", when: "action=remove", renamed: ["action=", "1=team"], set: ["member=@me"] }]),
+    call("team-logs list", [team, action], [{ command: "spacesheep crew", when: "action=log", renamed: ["1=team"], set: [] }]),
+    call("teams delete", [team], [{ command: "spacesheep crew", when: "yes=true", renamed: ["1=team"], set: [] }]),
+    call("team-labels update", [team, labels], [{ command: "spacesheep crew", when: "labels", renamed: ["1=team"], set: ["labels=a, b"] }]),
+    call("teams get", [team], [{ command: "spacesheep crew", when: "", renamed: ["1=team"], set: [] }]),
+    call("team-words create", [team, member], [{ command: "spacesheep word", when: "2=add", renamed: ["1=team", "2=", "3=member"], set: [] }]),
+    call("team-words delete", [team, member], [{ command: "spacesheep word", when: "2=remove", renamed: ["1=team", "3=member"], set: [] }]),
+  ] }] };
+}
+async function pick(line) {
+  const table = oldForms(), argv = line.split(" ");
+  const found = doors.match(table, argv);
+  const { found: chosen, parsed } = await doors.resolve(found, argv.slice(found[0].used), { env: {} });
+  return [chosen.method.cli.command.replace("spacesheep ", ""), parsed.inputs];
+}
+
+test("when field=value: given and equal as text picks that form, and the flag goes where the call has no such input", async () => {
+  assert.deepStrictEqual(await pick("crew flock --action add --member @b"), ["team-members create", { team: "flock", member: "@b", role: "member" }]);
+  assert.deepStrictEqual(await pick("crew flock --action=remove --member @b"), ["team-members delete", { team: "flock", member: "@b" }]);
+  // a call that takes the input keeps it
+  assert.deepStrictEqual(await pick("crew flock --action log"), ["team-logs list", { team: "flock", action: "log" }]);
+  // a word by its number; a word dropped by the pick doesn't move the others
+  assert.deepStrictEqual(await pick("word flock add @b"), ["team-words create", { team: "flock", member: "@b" }]);
+  assert.deepStrictEqual(await pick("word flock remove @b"), ["team-words delete", { team: "flock", member: "@b" }]);
+  // a bare flag reads as true
+  assert.deepStrictEqual(await pick("crew flock --yes"), ["teams delete", { team: "flock" }]);
+  assert.deepStrictEqual(await pick("crew flock --yes=true"), ["teams delete", { team: "flock" }]);
+});
+
+test("when field=value: another value, none, or the flag twice doesn't pick it", async () => {
+  await assert.rejects(pick("crew flock --action nope"), (e) => e.code === "EUSAGE");
+  await assert.rejects(pick("crew flock --action add --action remove --member @b"), (e) => e.code === "EUSAGE");
+  await assert.rejects(pick("word flock nope @b"), (e) => e.code === "EUSAGE");
+  assert.deepStrictEqual(await pick("crew flock"), ["teams get", { team: "flock" }]);
+});
+
+test("when field: an old flag or word the line gave, not an input that came from elsewhere", async () => {
+  assert.deepStrictEqual(await pick("crew flock --labels x"), ["team-labels update", { team: "flock", labels: ["x"] }]);
+  // today's tables: old flags and an old word
+  assert.equal((await request("share x --visibility public")).method, "PATCH");
+  assert.match((await request("read x index.html")).url, /\/files\/index\.html/);
+  assert.match((await request("read x")).url, /\/files(\?|$)/);
+});
+
+test("set: an empty value counts as left out, in a list too; a @ word only a lookup knows is refused, not sent", async () => {
+  assert.deepStrictEqual(await pick("crew flock --labels="), ["team-labels update", { team: "flock", labels: ["a", "b"] }]);
+  await assert.rejects(pick("crew flock --action remove"), (e) => e.code === "EUSAGE" && /crew needs --member: this CLI can't work out @me/.test(e.message));
+  // the refusal is the picked form's: no other form runs instead
+  assert.deepStrictEqual(await pick("crew flock --action remove --member @b"), ["team-members delete", { team: "flock", member: "@b" }]);
+});
+
 test("a session flag left out comes from the harness", async () => {
   const r = await request("talk-messages create --text hi", { CLAUDE_CODE_SESSION_ID: "11b51bc8" });
   assert.deepEqual(JSON.parse(r.body), { text: "hi", session: "11b51bc8" });
