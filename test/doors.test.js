@@ -286,8 +286,13 @@ test("the table: cached per origin, revalidated by ETag, a 404 remembered for a 
   assert.notEqual(doors.cachePath(dir, ORIGIN), doors.cachePath(dir, "https://mcp.spacesheep.dev"));
 });
 
-// A fetch that never answers: it rejects when its signal times out, as fetch does.
-const hang = (init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
+// A fetch that never answers: it rejects when its signal times out, as fetch does. The
+// timeout's own timer doesn't hold the event loop open (a real fetch's socket does), so
+// this one holds it until then.
+const hang = (init) => new Promise((_, reject) => {
+  const hold = setInterval(() => {}, 1000);
+  init.signal.addEventListener("abort", () => { clearInterval(hold); reject(init.signal.reason); });
+});
 
 test("the table: with none cached, `trouble` hears why there is none (a 404 isn't trouble)", async () => {
   const dir = tmp();
