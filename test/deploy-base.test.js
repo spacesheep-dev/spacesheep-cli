@@ -240,9 +240,9 @@ test("a merge with no base known holds the folder: no deploy from it until it na
   await run(dir, {}, { deploy: published("ppp444", { merged: { merged: ["index.html"], kept: [] } }) });
   assert.equal(savedBase(at(dir)), null);
   await assert.rejects(run(dir, {}, { deploy: published("qqq555") }), (e) => {
-    assert.match(e.message, /merged with edits made on the server, into version ppp444/);
+    assert.match(e.message, /merged with changes made on the server, into version ppp444/);
     assert.match(e.message, /spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1/);
-    assert.match(e.message, /--replace/);
+    assert.match(e.message, /erasing them: --replace\.$/);
     assert.equal(e.calls.length, 0, "nothing uploaded or deployed");
     return true;
   });
