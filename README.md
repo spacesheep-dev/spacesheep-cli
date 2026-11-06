@@ -378,7 +378,7 @@ npx -y spacesheep@latest stream lab-work/my-box --system --load-test --service
 
 - `--system`: a built-in reader of the machine itself, twice a second: per-core load, load average, memory, temperatures (real sensors on Linux when present, otherwise a thermal model, marked `"temp_source":"model"`), plus pressure stalls, disk and network on Linux. Linux and macOS.
 - `--load-test`: built-in buttons with nothing to install: `run` (every core at `intensity`% for `seconds`, both clamped), `cpu_one`, `memory`, `stop`. The readings say which test is running and which buttons exist.
-- `--service`: a systemd user unit (Linux) or launchd agent (macOS) that keeps the stream running and restarts it; `--remove-service` takes it away.
+- `--service`: a systemd user unit (Linux) or launchd agent (macOS) that keeps the stream running and restarts it, except after a permanent plan refusal; `--remove-service` takes it away. Also works with camera/screen/file streams.
 
 Your own numbers instead:
 
@@ -396,6 +396,73 @@ npx -y spacesheep@latest stream lab-work/gcp-1 --run "node collect.js" \
 
 A page shows a stream once it declares it: `<meta name="ss-streams" content="lab-work/gcp-1">`, then
 `ss.stream("lab-work/gcp-1").draw((last, history, status) => …)`.
+
+### Refusals, retries and exit codes
+
+Sending live **values** needs Max (a Team seat counts); watching does not. A
+`plan_required` refusal stops the command immediately with **exit code 4**, prints
+one line with <https://spacesheep.dev/plans> and says it will not be retried. Queued
+values are not pushed. The same rule applies to button listeners and filming
+(`--camera`, `--screen`, `--rtsp`, `--file`, `--test`), whose entitlement is different:
+Pro allows one camera, Max/Team five. Inspect the machine-readable `code` (or an
+`error` equal to `plan_required`), not the prose or HTTP status alone. Other
+401/403 responses still stop with exit 3.
+
+New `--service` installs stop restarting after exit 4. On Linux the unit uses
+`RestartPreventExitStatus=4`. On macOS a shell wrapper translates only the CLI's
+exit 4 into success for launchd's `KeepAlive.SuccessfulExit=false`; other exits
+keep the previous restart behavior. The CLI itself still exits 4. **After updating,
+stop an older service with `spacesheep stream <name> --remove-service`, then re-run
+your original command with `--service` to replace its template and process.**
+After fixing the plan, run that command again to start it. With your own
+supervisor, configure exit 4 as a non-restartable failure.
+
+The following statuses and fields were checked against
+[server source b5d5ec7](https://github.com/spacesheep-dev/spacesheep/tree/b5d5ec7694ee39f1238807f313be0dc257f9d2e9)
+(2026-10-25). Status is the HTTP transport status, not the CLI exit code.
+
+| Operation / refusal | HTTP status | Machine-readable field | What to do / CLI behavior |
+|---|---|---|---|
+| Value stream plan | 403 | `code: "plan_required"` | Max needed; exits 4, no retry. Recognized on other statuses too. |
+| Filming plan | 403 | `code: "plan_required"` | Pro or Max/Team needed; exits 4, no retry. |
+| Stream key rejected | 401 | `code: "unauthorized"` | Check the key; exits 3. |
+| Stream key has the wrong scope | 403 | `code: "ingest_only"`, `"read_only"` or `"unknown_kind"` | Use a streams or full key; exits 3. |
+| Account's stream count reached | 403 | `error: "stream_cap"` | Read `detail`; exits 3. This is not `plan_required`. |
+| Value/picture rate limit | 429 | `error: "rate"`, with `retry_ms` | Transient: values wait and retry the batch; filming continues with later pictures. |
+| Invalid value stream request | 400 | `code: "bad_path"`, `"bad_value"`, `"bad_request"` (or hub `error: "bad_request"`) | Correct the name/body; the refused batch is skipped. |
+| Oversized value batch | 413 | `code: "too_large"` | Reduce the payload; the refused batch is skipped. |
+| Camera count reached | 409 | `code: "live_cap"` | Stop another camera; startup exits 1. |
+| Filming access/declaration refused | 403 | `code: "not_editor"` or `"undeclared"` | Check page access and its stream declaration; exits 3. |
+| Camera stopped/replaced | 410 | Beat: `gone: true`; still: `error: "stopped"` | Filming stops with exit 1. |
+| Deploy publish-count cap (including the 24-hour cap) | 200, MCP result | `error: "rate_limited"`, `retry_after` (seconds) | The message names `deploy/86400` for the daily cap, `deploy/600` for the burst cap, or `space_create/...` for new-page caps. Wait the indicated time; deploy exits 1 without automatically retrying. |
+| Deploy rolling 24-hour byte budget | 200, MCP result | `error: "quota_exceeded"` | Distinct from the publish-count cap. Wait for budget to free up or reduce new bytes; unchanged files cost nothing. Deploy exits 1. |
+
+Deploy uses MCP: those two quota refusals are JSON text inside
+`result.content`, carried by an HTTP 200 SSE response. They are not an HTTP
+402/429 from the deploy tool. `stage_begin` can also report `quota_exceeded` in
+`preflight.problems` before uploads. Its other preflight codes are
+`too_many_files`, `invalid_path`, `file_too_large`, `payload_too_large`,
+`text_payload_too_large` and `worker_restricted`; correct the files or plan before
+retrying. No `plan_required` deploy refusal was found in these guards.
+
+A transport 429 or 5xx, a network error, or a timeout is different from an
+explicit plan code. In a running value stream, 429 requeues the batch, network
+errors/timeouts retry with backoff, and other unsuccessful responses (including
+5xx) log a failure, discard that batch and continue with subsequent values.
+Filming's upload loop keeps trying subsequent pictures on transient failures.
+Deploy reports transport failures and exits; it does not have an automatic retry
+loop. Reuse valid staged hashes when retrying a deploy after its `retry_after`.
+
+Source locations: value-stream gates in
+[`packages/app/src/index.ts`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/packages/app/src/index.ts#L5085),
+[`stream-hub.ts`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/packages/app/src/stream-hub.ts#L279),
+[`video-routes.ts`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/packages/app/src/video-routes.ts#L173),
+MCP [`limited` / `overDailyBudget`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/packages/mcp/src/index.ts#L1089),
+[`deploy-preflight.ts`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/packages/mcp/src/deploy-preflight.ts#L91)
+and [`deployRules`](https://github.com/spacesheep-dev/spacesheep/blob/b5d5ec7694ee39f1238807f313be0dc257f9d2e9/shared/ratelimit.ts#L204).
+The pinned MCP transport is `agents@0.17.3` →
+`@modelcontextprotocol/sdk@1.29.0`
+([`WebStandardStreamableHTTPServerTransport`](https://github.com/modelcontextprotocol/typescript-sdk/blob/v1.29.0/src/server/webStandardStreamableHttp.ts)).
 
 ## spacesheep.dev at localhost (the mirror)
 
