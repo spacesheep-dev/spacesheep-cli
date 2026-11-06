@@ -340,12 +340,22 @@ test("the table: a cached copy that can't run the line is asked for in full (a c
   assert.ok(await doors.loadTable(at(0)));
   assert.ok(await doors.loadTable(at(1000, { can: () => true })));
   assert.equal(asked, 1, "a copy that runs the line: fresh for its max-age");
+  const fetchedAt = () => JSON.parse(fs.readFileSync(doors.cachePath(dir, ORIGIN), "utf8")).fetched_at;
   mode = "slow";
   assert.ok(await doors.loadTable(at(2000, { can: () => false })));
-  assert.equal(asked, 2, "one that can't: asked, within its max-age too");
-  assert.equal(JSON.parse(fs.readFileSync(doors.cachePath(dir, ORIGIN), "utf8")).fetched_at, 2000, "and the slow answer was waited for");
+  assert.equal(asked, 2, "one that can't, still fresh: asked anyway");
+  assert.equal(fetchedAt(), 2000, "and the slow answer was waited for");
+  assert.ok(await doors.loadTable(at(2000 + 61000, { can: () => false })));
+  assert.equal(asked, 3, "one that can't, expired: asked");
+  assert.equal(fetchedAt(), 63000, "and the slow answer was waited for");
+  // One that can run the line, expired, and a server that never answers: the short wait, then it runs.
   mode = "hang";
-  assert.ok(await doors.loadTable(at(3000, { can: () => false, timeout: 50 })), "no answer: still the old copy");
+  const t0 = Date.now();
+  assert.ok(await doors.loadTable(at(63000 + 61000, { can: () => true })));
+  assert.equal(asked, 4);
+  assert.ok(Date.now() - t0 < doors.REVALIDATE_TIMEOUT + 1000, `waited ${Date.now() - t0} ms`);
+  assert.deepEqual(heard, [], "nothing to report: the cached copy ran");
+  assert.ok(await doors.loadTable(at(200000, { can: () => false, timeout: 50 })), "can't, and no answer: still the old copy");
   assert.deepEqual(heard.map((t) => t.why), ["no answer in 0.05 s"], "and why the new one didn't come");
 });
 
