@@ -538,6 +538,30 @@ test("end to end: with no answer from the server, today's command waits only the
   } finally { s.closeAllConnections(); s.close(); }
 });
 
+test("end to end: today's command word and a verb (`versions list`) waits out a slow first table", async () => {
+  // On a fresh config, the 1.5 s probe ran today's `versions <space>` for a space called
+  // "list" when the server's first table took longer (staging, 6 Nov).
+  const seen = [];
+  const s = http.createServer((req, res) => {
+    seen.push(req.url);
+    const send = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(body); };
+    if (req.url === "/v1/doors.json") setTimeout(() => send(200, JSON.stringify(TABLE)), doors.PROBE_TIMEOUT + 1000);
+    else if (req.url.includes("/versions")) send(200, '{"versions":[]}');
+    else send(404, '{"code":"not_found","message":"no such route"}');
+  });
+  await new Promise((r) => s.listen(0, "127.0.0.1", r));
+  const env = { SPACESHEEP_ORIGIN: `http://127.0.0.1:${s.address().port}`, SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const r = await cli(["versions", "list", "--space", "@james/plan"], { ...env, SPACESHEEP_CONFIG_DIR: tmp() });
+    assert.equal(r.code, 0, r.err);
+    assert.ok(seen.some((u) => u.startsWith("/v1/spaces/") && u.includes("/versions")), "the door's call, not today's");
+    // A space after the word (not a verb) keeps the short probe.
+    const t0 = Date.now();
+    await cli(["versions", "@james/plan"], { ...env, SPACESHEEP_CONFIG_DIR: tmp() });
+    assert.ok(Date.now() - t0 < doors.PROBE_TIMEOUT + 900, `took ${Date.now() - t0} ms`);
+  } finally { s.closeAllConnections(); s.close(); }
+});
+
 test("end to end: a new command waits out a slow first answer of the table (a cold server)", async () => {
   // Staging's first /v1/doors.json on a fresh worker took 5 to 7 s (6 Nov): past the 5 s
   // a fetch waited, so `spaces list` printed today's help and exited 1.

@@ -524,7 +524,9 @@ async function newCall(command, inputs) {
  *  one of today's commands costs no request once a table is cached that doesn't name
  *  it. With no table cached (a fresh config, or a 404 older than MISSING_TTL), it asks
  *  once, for at most PROBE_TIMEOUT: else `versions list --space x` on a fresh install
- *  would run today's `versions <space>` for a space called "list". */
+ *  would run today's `versions <space>` for a space called "list". When the next word
+ *  reads like one of the table's verbs (`list`), it waits FETCH_TIMEOUT: a cold server's
+ *  first answer can take longer than the probe. */
 async function door(argv) {
   const word = argv[0];
   if (!word || word.startsWith("-") || word === "help") return null;
@@ -542,7 +544,8 @@ async function door(argv) {
     // A word that isn't one of today's commands runs from the table or not at all: with
     // no cached copy that runs this line, it waits out a slow server, and says so if the
     // table still doesn't come.
-    table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT }
+    const verbNext = /^[a-z][a-z-]*$/.test(argv[1] || "");
+    table = fetched = await doors.loadTable(probe ? { ...where, timeout: verbNext ? doors.FETCH_TIMEOUT : doors.PROBE_TIMEOUT }
       : commands[word] ? where
       : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => !!doors.match(t, argv) });
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
