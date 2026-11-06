@@ -292,7 +292,7 @@ const commands = {
     // Built on an older version: what landed since was merged in, line by line.
     if (r.merged) {
       const m = r.merged, merged = m.merged || [], kept = m.kept || [];
-      log(`  ⇄ Merged with what was published since your version (${String(m.base_sha || "").slice(0, 12)} → ${String(m.server_sha || "").slice(0, 12)}): ${merged.length} file(s) merged${merged.length ? ` (${merged.slice(0, 5).join(", ")}${merged.length > 5 ? ", …" : ""})` : ""}, ${kept.length} kept as they are on the server. Read the page back before saying what it says.`);
+      log(`  ⇄ Merged with what was published since your version (${String(m.base_sha || "").slice(0, 12)} → ${String(m.server_sha || "").slice(0, 12)}): ${merged.length} file(s) merged${merged.length ? ` (${merged.slice(0, 5).join(", ")}${merged.length > 5 ? ", …" : ""})` : ""}, ${kept.length} kept as they are on the server. Read the page back before saying what it says. This folder doesn't have the server's part, so the next deploy from it merges that in again (spacesheep read ${r.uuid || "<space>"} -o <folder> brings it here).`);
     }
     if (r.replaced) log(`  ! Replaced the live version ${String(r.replaced).slice(0, 12)} on purpose (--replace).`);
     if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);

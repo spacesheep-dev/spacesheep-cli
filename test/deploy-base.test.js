@@ -22,7 +22,7 @@ function page(pin) {
 
 /** One deploy against a fake server. `answers` maps a tool to its answer (a function
  *  of the args, or a value); a thrown answer is thrown. */
-async function run(dir, opts, answers, url = ORIGIN) {
+async function run(dir, opts, answers, url = ORIGIN, upload = async () => ({ ok: true, json: async () => ({ sha: "staged1" }) })) {
   const calls = [];
   const client = { url, call: async (name, args) => {
     calls.push([name, args]);
@@ -31,7 +31,7 @@ async function run(dir, opts, answers, url = ORIGIN) {
     return typeof a === "function" ? a(args) : a;
   } };
   const realFetch = global.fetch;
-  global.fetch = async () => ({ ok: true, json: async () => ({ sha: "staged1" }) });
+  global.fetch = upload;
   const prev = process.env.GITHUB_ACTIONS;
   delete process.env.GITHUB_ACTIONS;
   try {
@@ -43,6 +43,50 @@ async function run(dir, opts, answers, url = ORIGIN) {
   } finally { global.fetch = realFetch; if (prev !== undefined) process.env.GITHUB_ACTIONS = prev; }
 }
 const published = (sha, extra = {}) => ({ uuid: "sp-1", url: "https://spacesheep.dev/@y/q3", sha, is_update: true, ...extra });
+const at = (dir) => ({ origin: ORIGIN, space: "sp-1", dir });
+
+/** A space on a fake server that merges as main does: from the base a deploy names
+ *  (none: the caller's own head, so a replacement), file by file, then line by line. */
+function fakeSpace(start) {
+  const blobs = new Map();
+  const versions = new Map();
+  let head = null;
+  const put = (tree) => { head = `v${versions.size + 1}`; versions.set(head, tree); return head; };
+  put(start);
+  const CLASH = Symbol("clash");
+  const pick = (x, o, t) => (o === t ? o : o === x ? t : t === x ? o : CLASH);
+  const lines = (x, o, t, p) => {
+    const [X, O, T] = [x, o, t].map((v) => (v === undefined ? null : v.split("\n")));
+    if (!X || !O || !T || X.length !== O.length || X.length !== T.length) throw new Error(`fake server: ${p} can't be merged line by line`);
+    return X.map((l, i) => { const v = pick(l, O[i], T[i]); if (v === CLASH) throw new Error(`fake server: ${p} line ${i + 1} clashes`); return v; }).join("\n");
+  };
+  return {
+    get head() { return head; },
+    files: () => versions.get(head),
+    /** Someone else's save, on the server. */
+    edit(fn) { const t = { ...versions.get(head) }; fn(t); return put(t); },
+    upload: async (url, init) => {
+      const sha = `st${blobs.size + 1}`;
+      blobs.set(sha, Buffer.from(init.body).toString("utf-8"));
+      return { ok: true, json: async () => ({ sha }) };
+    },
+    deploy(args) {
+      const ours = Object.fromEntries(args.files.map((f) => [f.path, blobs.get(f.staged_sha)]));
+      const base = args.base_sha || head;
+      if (base === head) return published(put(ours));
+      const b = versions.get(base), h = versions.get(head), out = {}, merged = [], kept = [];
+      for (const p of new Set([...Object.keys(b), ...Object.keys(h), ...Object.keys(ours)])) {
+        const [x, o, t] = [b[p], ours[p], h[p]];
+        let v = pick(x, o, t);
+        if (v === CLASH) { v = lines(x, o, t, p); merged.push(p); } else if (o !== t && v === t) kept.push(p);
+        if (v !== undefined) out[p] = v;
+      }
+      const was = head;
+      return published(put(out), { merged: { base_sha: base, server_sha: was, merged, kept } });
+    },
+  };
+}
+const body = (dir, ps) => fs.writeFileSync(path.join(dir, "index.html"), `<html><head><title>Q3</title></head><body>\n${ps.map((p) => `<p>${p}</p>`).join("\n")}\n</body></html>\n`);
 
 test("the first update sends no base; the next sends the sha the first was published as", async () => {
   const dir = page({ space: "sp-1" });
@@ -93,6 +137,65 @@ test("--replace that merged a save landing in between says merged, not replaced"
     deploy: published("hhh888", { merged: { base_sha: "new999", server_sha: "late000", merged: ["index.html"], kept: [] } }),
   });
   assert.equal(r.replaced, undefined);
+  assert.equal(savedBase(at(dir)), "new999", "not the merged sha: this folder lacks the save that landed");
+});
+
+test("a second deploy after a merge keeps the server's own file and lines", async () => {
+  const space = fakeSpace({});
+  const dir = page({ space: "sp-1" });
+  const answers = { deploy: (a) => space.deploy(a) };
+  const go = () => run(dir, {}, answers, ORIGIN, space.upload);
+  body(dir, ["A", "B", "C"]);
+  await go();
+  const built = space.head;
+  // Someone else, on the server: a file of their own, and a line of the page.
+  space.edit((t) => { t["notes.html"] = "theirs"; t["index.html"] = t["index.html"].replace("<p>C</p>", "<p>C, theirs</p>"); });
+  body(dir, ["A, mine", "B", "C"]);
+  const two = await go();
+  assert.deepEqual([two.sent.base_sha, two.r.merged.merged, two.r.merged.kept], [built, ["index.html"], ["notes.html"]]);
+  // The next deploy from the same folder, which still lacks notes.html and their line.
+  body(dir, ["A, mine", "B, mine", "C"]);
+  const three = await go();
+  const live = space.files();
+  assert.equal(live["notes.html"], "theirs", "the server's own file survives the second deploy");
+  assert.match(live["index.html"], /<p>A, mine<\/p>\n<p>B, mine<\/p>\n<p>C, theirs<\/p>/, "their line survives beside mine");
+  assert.equal(three.sent.base_sha, built);
+  assert.ok(three.r.merged, "merged again, not replaced");
+  assert.equal(savedBase(at(dir)), built);
+  // The server's part brought here, and deployed on the live version as the merge line
+  // says: now the folder is what is live, and the next deploy builds on that.
+  body(dir, ["A, mine", "B, mine", "C, theirs"]);
+  fs.writeFileSync(path.join(dir, "notes.html"), "theirs");
+  const four = await run(dir, { base: space.head }, answers, ORIGIN, space.upload);
+  assert.equal(four.r.merged, undefined);
+  const five = await go();
+  assert.equal(five.sent.base_sha, four.r.sha);
+});
+
+test("a merge on the server's own guess of the base keeps that base", async () => {
+  const dir = page({ space: "sp-1" });
+  const { sent } = await run(dir, {}, { deploy: published("mmm222", { base_inferred: { base_sha: "own111" }, merged: { base_sha: "own111", server_sha: "srv111", merged: [], kept: ["notes.html"] } }) });
+  assert.equal(sent.base_sha, undefined);
+  assert.equal(savedBase(at(dir)), "own111");
+  const next = await run(dir, {}, { deploy: published("nnn333") });
+  assert.equal(next.sent.base_sha, "own111");
+});
+
+test("a merge with no base known holds the folder: no deploy from it until it names one", async () => {
+  const dir = page({ space: "sp-1" });
+  await run(dir, {}, { deploy: published("ppp444", { merged: { merged: ["index.html"], kept: [] } }) });
+  assert.equal(savedBase(at(dir)), null);
+  await assert.rejects(run(dir, {}, { deploy: published("qqq555") }), (e) => {
+    assert.match(e.message, /merged with edits made on the server, into version ppp444/);
+    assert.match(e.message, /spacesheep read sp-1 -o <folder>, put your changes in, then deploy with --base ppp444/);
+    assert.match(e.message, /--replace/);
+    assert.equal(e.calls.length, 0, "nothing uploaded or deployed");
+    return true;
+  });
+  const { sent } = await run(dir, { base: "ppp444" }, { deploy: published("rrr666") });
+  assert.equal(sent.base_sha, "ppp444");
+  const after = await run(dir, {}, { deploy: published("sss777") });
+  assert.equal(after.sent.base_sha, "rrr666");
 });
 
 test("--replace with no version to read, or on a new space, deploys nothing", async () => {
