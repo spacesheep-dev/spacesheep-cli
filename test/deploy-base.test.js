@@ -136,15 +136,23 @@ test("no_base, today's JSON and a door's ErrorInfo alike, says how to go on", as
   assert.match(today, /live version: srv333\n/);
   assert.match(today, /--replace/);
   const dir = page({ space: "sp-1" });
-  const door = Object.assign(new Error("A save needs its parent: the live version was published by ana@x.com (srv333)."), {
-    code: "ETOOL", info: { code: "aborted", message: "…", violations: [{ field: "parent", message: "no_base" }] },
-  });
-  await assert.rejects(run(dir, {}, { deploy: () => { throw door; } }), (e) => {
-    assert.match(e.message, /^A save needs its parent/);
-    assert.match(e.message, /on purpose: spacesheep deploy .* --replace/);
-    assert.match(e.message, /--base <its sha>/);
-    return true;
-  });
-  const other = Object.assign(new Error("over quota"), { code: "ETOOL", info: { code: "resource_exhausted", message: "over quota", violations: [] } });
-  await assert.rejects(run(dir, {}, { deploy: () => { throw other; } }), (e) => e.message === "over quota");
+  // A door's shapes (ssapi/picks-base): code `conflict`, a violation on `parent`.
+  for (const why of ["no_base", "conflict"]) {
+    const door = Object.assign(new Error("A save needs its parent: the live version was published by ana@x.com (srv333)."), {
+      code: "ETOOL", info: { code: "conflict", message: "…", violations: [{ field: "parent", message: why }] },
+    });
+    await assert.rejects(run(dir, {}, { deploy: () => { throw door; } }), (e) => {
+      assert.match(e.message, /^A save needs its parent/);
+      assert.match(e.message, /on purpose: spacesheep deploy .* --replace/);
+      assert.match(e.message, /--base <its sha>/);
+      return true;
+    });
+  }
+  for (const info of [
+    { code: "resource_exhausted", message: "over quota", violations: [] },
+    { code: "aborted", message: "over quota", violations: [{ field: "files", message: "too_many" }] },
+  ]) {
+    const other = Object.assign(new Error("over quota"), { code: "ETOOL", info });
+    await assert.rejects(run(dir, {}, { deploy: () => { throw other; } }), (e) => e.message === "over quota");
+  }
 });
