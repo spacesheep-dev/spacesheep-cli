@@ -13,6 +13,15 @@ test("a whole space: each file exactly, trailing newlines as they are", () => {
   assert.deepEqual(as(parseRead(files.map(([p, c]) => part(p, c)).join("\n\n"))), files);
 });
 
+test("a file the server decoded as text is not exact: its size, or a replaced byte, says so", () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00]);
+  const sameLength = Buffer.from([0xf0, 0x90, 0x80, 0x41]);
+  const wire = (p, b) => `--- ${p} (${b.length} bytes) ---\n${new TextDecoder().decode(b)}`;
+  const files = parseRead([wire("index.html", Buffer.from("hi\n")), wire("logo.png", png), wire("a.bin", sameLength), wire("z.txt", Buffer.from("z"))].join("\n\n"));
+  assert.deepEqual(files.map((f) => [f.path, f.exact]), [["index.html", true], ["logo.png", false], ["a.bin", false], ["z.txt", true]]);
+  assert.equal(files[3].content.toString(), "z", "the file after a damaged one is still found");
+});
+
 test("the Discussion and a version line are not files", () => {
   const text = `--- discussion ---\nana: I'm on the chart\n--- end of discussion ---\n\nVersion "Deploy from CLI" deployed 2026-11-06 (sha abc123)\n\n${part("index.html", "hi\n")}`;
   assert.deepEqual(as(parseRead(text)), [["index.html", "hi\n"]]);

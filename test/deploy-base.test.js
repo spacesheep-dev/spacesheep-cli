@@ -47,7 +47,9 @@ const published = (sha, extra = {}) => ({ uuid: "sp-1", url: "https://spacesheep
 const at = (dir) => ({ origin: ORIGIN, space: "sp-1", dir });
 
 /** A space on a fake server that merges as main does: from the base a deploy names
- *  (none: the caller's own head, so a replacement), file by file, then line by line. */
+ *  (none: the caller's own head, so a replacement), file by file, then line by line.
+ *  Files are kept as bytes (one latin1 character each); read_space decodes them as
+ *  UTF-8 text the way the server does, and get_file sends a non-text one whole. */
 function fakeSpace(start) {
   const blobs = new Map();
   const versions = new Map();
@@ -68,14 +70,18 @@ function fakeSpace(start) {
     versions: () => ({ versions: [...versions.keys()].reverse().map((sha, i) => ({ sha, latest: i === 0 })) }),
     read(args) {
       const sha = args.version || head;
-      const files = Object.entries(versions.get(sha)).map(([p, c]) => `--- ${p} (${Buffer.byteLength(c)} bytes) ---\n${c}`);
+      const files = Object.entries(versions.get(sha)).map(([p, c]) => `--- ${p} (${c.length} bytes) ---\n${Buffer.from(c, "latin1").toString("utf-8")}`);
       return `--- discussion ---\nB: working on the second paragraph\n--- end of discussion ---\n\n${args.version ? `Version "v" deployed now (sha ${sha})\n\n` : ""}${files.join("\n\n")}`;
+    },
+    getFile(args) {
+      const b = Buffer.from(versions.get(args.version || head)[args.file], "latin1");
+      try { return { file: { path: args.file, content: new TextDecoder("utf-8", { fatal: true }).decode(b) } }; } catch { return { file: { path: args.file, data: b.toString("base64") } }; }
     },
     /** Someone else's save, on the server. */
     edit(fn) { const t = { ...versions.get(head) }; fn(t); return put(t); },
     upload: async (url, init) => {
       const sha = `st${blobs.size + 1}`;
-      blobs.set(sha, Buffer.from(init.body).toString("utf-8"));
+      blobs.set(sha, Buffer.from(init.body).toString("latin1"));
       return { ok: true, json: async () => ({ sha }) };
     },
     deploy(args) {
@@ -94,6 +100,14 @@ function fakeSpace(start) {
     },
   };
 }
+/** A client reading `space`, with picks' get_file or, like main, without it. */
+const reader = (space, getFile = true) => ({ url: ORIGIN, call: async (n, a) => {
+  if (n === "list_versions") return space.versions();
+  if (n === "read_space") return space.read(a);
+  if (n === "get_file" && getFile) return space.getFile(a);
+  throw new Error(`Tool ${n} not found`);
+} });
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xd8, 0x00, 0x80, 0x0a]);
 const body = (dir, ps) => fs.writeFileSync(path.join(dir, "index.html"), `<html><head><title>Q3</title></head><body>\n${ps.map((p) => `<p>${p}</p>`).join("\n")}\n</body></html>\n`);
 
 test("the first update sends no base; the next sends the sha the first was published as", async () => {
@@ -173,7 +187,7 @@ test("a second deploy after a merge keeps the server's own file and lines", asyn
   // The server's part brought here with read -o, as the merge line says: the folder is
   // now what is live, so a plain deploy builds on that and publishes it as it is.
   const live9 = space.head;
-  await read({ url: ORIGIN, call: async (n, a) => (n === "list_versions" ? space.versions() : space.read(a)) }, "sp-1", { dir });
+  await read(reader(space), "sp-1", { dir });
   assert.equal(fs.readFileSync(path.join(dir, "notes.html"), "utf-8"), "theirs");
   assert.equal(savedBase(at(dir)), live9);
   const four = await go();
@@ -186,8 +200,7 @@ test("a second deploy after a merge keeps the server's own file and lines", asyn
 test("a second writer reads the page, changes it and deploys with no sha: merged with what landed", async () => {
   const space = fakeSpace({ "index.html": "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n" });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-read-"));
-  const reader = { url: ORIGIN, call: async (n, a) => (n === "list_versions" ? space.versions() : space.read(a)) };
-  const got = await read(reader, "sp-1", { dir });
+  const got = await read(reader(space), "sp-1", { dir });
   assert.equal(got.sha, "v1");
   assert.deepEqual(fs.readdirSync(dir).sort(), ["index.html"], "the Discussion isn't a file");
   assert.equal(fs.readFileSync(path.join(dir, "index.html"), "utf-8"), space.files()["index.html"], "byte for byte, last newline too");
@@ -198,6 +211,37 @@ test("a second writer reads the page, changes it and deploys with no sha: merged
   assert.equal(sent.base_sha, "v1");
   assert.ok(r.merged);
   assert.match(space.files()["index.html"], /<p>A, first<\/p>\n<p>B, second<\/p>\n<p>C<\/p>/);
+});
+
+test("read -o of a page with an image: whole through get_file, then a plain deploy keeps it intact", async () => {
+  const space = fakeSpace({ "index.html": "<p>A</p>\n", "logo.png": PNG.toString("latin1") });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-png-"));
+  const got = await read(reader(space), "sp-1", { dir });
+  assert.equal(got.sha, "v1");
+  assert.ok(fs.readFileSync(path.join(dir, "logo.png")).equals(PNG), "the image byte for byte");
+  assert.equal(savedBase(at(dir)), "v1");
+  fs.writeFileSync(path.join(dir, "index.html"), "<p>A, mine</p>\n");
+  const { sent } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v1");
+  assert.ok(Buffer.from(space.files()["logo.png"], "latin1").equals(PNG), "the live image is unchanged");
+  assert.equal(space.files()["index.html"], "<p>A, mine</p>\n");
+});
+
+test("read -o of a page with an image on a server without get_file: nothing written, no base", async () => {
+  const space = fakeSpace({ "index.html": "<p>A</p>\n", "logo.png": PNG.toString("latin1") });
+  const dir = page({ space: "sp-1" });
+  fs.writeFileSync(path.join(dir, "logo.png"), PNG);
+  const before = Object.fromEntries(fs.readdirSync(dir).map((f) => [f, fs.readFileSync(path.join(dir, f))]));
+  await run(dir, {}, { deploy: published("old000") });
+  await assert.rejects(read(reader(space, false), "sp-1", { dir }), (e) => {
+    assert.match(e.message, /^logo\.png can't be read byte for byte \(read_space returns files as text, and this server can't send it whole\), so nothing was written to .* and no version was saved for it\.$/);
+    return true;
+  });
+  for (const [f, bytes] of Object.entries(before)) if (f !== ".spacesheep.json") assert.ok(fs.readFileSync(path.join(dir, f)).equals(bytes), `${f} as it was`);
+  assert.equal(savedBase(at(dir)), "old000", "the folder's base is as it was");
+  // A size that matches but bytes a decoder replaced are no more exact.
+  const same = fakeSpace({ "index.html": "<p>A</p>\n", "a.bin": Buffer.from([0xf0, 0x90, 0x80, 0x41]).toString("latin1") });
+  await assert.rejects(read(reader(same, false), "sp-1", { dir: fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-bin-")) }), /^a\.bin can't be read byte for byte/);
 });
 
 test("read -o as a viewer reads the live page with no base: viewers can't list versions", async () => {
