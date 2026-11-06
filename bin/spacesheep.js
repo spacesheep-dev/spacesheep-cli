@@ -527,11 +527,11 @@ async function newCall(command, inputs) {
  *  would run today's `versions <space>` for a space called "list". */
 async function door(argv) {
   const word = argv[0];
-  if (!word || word.startsWith("-")) return null;
+  if (!word || word.startsWith("-") || word === "help") return null;
   if (commands[word] && HELD.has(word)) return null;   // held whatever the table says: no request for it
   const doors = require("../lib/doors");
   const where = { origin: cfg.origin(), configDir: cfg.configDir() };
-  let table;
+  let table, trouble = null;
   try {
     let probe = false;
     if (commands[word]) {
@@ -539,9 +539,16 @@ async function door(argv) {
       if (known && !doors.namesWord(known, word)) return null;
       probe = !known;
     }
-    table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT } : where);
+    // A word that isn't one of today's commands runs from the table or not at all: with
+    // none cached, it waits out a slow server, and says so if the table still doesn't come.
+    table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT }
+      : commands[word] ? where : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; } });
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
-  if (!table) return null;
+  if (!table) {
+    if (!trouble) return null;
+    console.error(`\n  ✗ The server's list of commands didn't come: ${trouble.why}, from ${trouble.url}.\n    "${word}" isn't one of this CLI's own commands, so it needs that list. Try again in a moment;\n    \`spacesheep --help\` lists this CLI's own commands.\n`);
+    return 1;
+  }
   const found = doors.match(table, argv);
   if (!found) {
     if (commands[word]) return null;

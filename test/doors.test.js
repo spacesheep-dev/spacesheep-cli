@@ -286,6 +286,58 @@ test("the table: cached per origin, revalidated by ETag, a 404 remembered for a 
   assert.notEqual(doors.cachePath(dir, ORIGIN), doors.cachePath(dir, "https://mcp.spacesheep.dev"));
 });
 
+// A fetch that never answers: it rejects when its signal times out, as fetch does.
+const hang = (init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
+
+test("the table: with none cached, `trouble` hears why there is none (a 404 isn't trouble)", async () => {
+  const dir = tmp();
+  let reply;
+  const fetchImpl = async (url, init) => {
+    if (reply === "hang") return hang(init);
+    if (reply === "refused") throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+    return { status: reply, ok: reply < 300, headers: { get: () => null }, text: async () => "<html>login</html>" };
+  };
+  const heard = [];
+  const at = (extra = {}) => ({ origin: ORIGIN, configDir: dir, fetchImpl, now: 1, env: {}, trouble: (t) => heard.push(t), ...extra });
+  reply = "hang"; assert.equal(await doors.loadTable(at({ timeout: 50 })), null);
+  reply = "refused"; assert.equal(await doors.loadTable(at()), null);
+  reply = 503; assert.equal(await doors.loadTable(at()), null);
+  reply = 200; assert.equal(await doors.loadTable(at()), null);
+  assert.deepEqual(heard.map((t) => t.why), ["no answer in 0.05 s", "couldn't connect (ECONNREFUSED)", "HTTP 503", "an answer that isn't JSON"]);
+  assert.equal(heard[0].url, `${ORIGIN}/v1/doors.json`);
+  reply = 404; assert.equal(await doors.loadTable(at()), null);
+  reply = 401; assert.equal(await doors.loadTable(at()), null);
+  assert.equal(heard.length, 4, "a 404 or 401 is a server without the table, not trouble");
+});
+
+test("the table: used as it is for the server's max-age; a revalidation waits only briefly", async () => {
+  const dir = tmp();
+  const calls = [];
+  let mode = "ok";
+  const fetchImpl = async (url, init) => {
+    calls.push(init.headers["If-None-Match"] || null);
+    if (mode === "hang") return hang(init);
+    const get = (h) => (h === "cache-control" ? "public, max-age=60" : h === "etag" ? '"m1"' : null);
+    if (mode === "304") return { status: 304, ok: false, headers: { get }, text: async () => "" };
+    return { status: 200, ok: true, headers: { get }, text: async () => JSON.stringify(TABLE) };
+  };
+  const at = (now, extra = {}) => ({ origin: ORIGIN, configDir: dir, fetchImpl, now, env: {}, ...extra });
+  assert.ok(await doors.loadTable(at(0)));
+  assert.ok(await doors.loadTable(at(59000)));
+  assert.equal(calls.length, 1, "fresh for its max-age: no request");
+  mode = "304";
+  assert.ok(await doors.loadTable(at(61000)));
+  assert.deepEqual(calls, [null, '"m1"'], "then revalidated by ETag");
+  assert.ok(await doors.loadTable(at(100000)));
+  assert.equal(calls.length, 2, "a 304 starts its max-age again");
+  mode = "hang";
+  let heard = null;
+  const t0 = Date.now();
+  assert.ok(await doors.loadTable(at(200000, { timeout: doors.NEED_TIMEOUT, trouble: (t) => { heard = t; } })), "the cached table runs");
+  assert.ok(Date.now() - t0 < doors.REVALIDATE_TIMEOUT + 1000, `waited ${Date.now() - t0} ms`);
+  assert.equal(heard, null, "with a table to run, nothing to report");
+});
+
 // ---------------------------------------------------------------- end to end: the CLI against a local server
 
 function server(routes) {
@@ -435,6 +487,42 @@ test("end to end: with no answer from the server, today's command waits only the
     assert.equal(w.code, 0, w.err);
     assert.ok(Date.now() - t0 < doors.PROBE_TIMEOUT + 2000, `took ${Date.now() - t0} ms`);
   } finally { s.closeAllConnections(); s.close(); }
+});
+
+test("end to end: a new command waits out a slow first answer of the table (a cold server)", async () => {
+  // Staging's first /v1/doors.json on a fresh worker took 5 to 7 s (6 Nov): past the 5 s
+  // a fetch waited, so `spaces list` printed today's help and exited 1.
+  const seen = [];
+  const s = http.createServer((req, res) => {
+    seen.push(req.url);
+    const send = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(body); };
+    if (req.url === "/v1/doors.json") setTimeout(() => send(200, JSON.stringify(TABLE)), 6000);
+    else if (req.url.startsWith("/v1/spaces")) send(200, "{}");
+    else send(404, '{"code":"not_found","message":"no such route"}');
+  });
+  await new Promise((r) => s.listen(0, "127.0.0.1", r));
+  const env = { SPACESHEEP_ORIGIN: `http://127.0.0.1:${s.address().port}`, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const r = await cli(["spaces", "list"], env);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(seen, ["/v1/doors.json", "/v1/spaces"]);
+    assert.equal(r.out, "");
+    assert.equal(r.err, "  No spaces.\n", "an empty list says so, not just done");
+  } finally { s.closeAllConnections(); s.close(); }
+});
+
+test("end to end: a new command says the table didn't come, instead of today's help", async () => {
+  const { s, origin } = await server((req) => (req.url === "/v1/doors.json" ? [503, "<html>busy</html>"] : null));
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const r = await cli(["spaces", "list"], env);
+    assert.equal(r.code, 1);
+    assert.equal(r.out, "", "not today's help");
+    assert.match(r.err, /The server's list of commands didn't come: HTTP 503, from http:\/\/127\.0\.0\.1:\d+\/v1\/doors\.json\./);
+    assert.match(r.err, /"spaces" isn't one of this CLI's own commands/);
+    const w = await cli(["whoami"], env);
+    assert.equal(w.code, 0, "today's commands still run");
+  } finally { s.close(); }
 });
 
 // A server with the new calls and no MCP: any fall-back to today's tools is a 404 here.
