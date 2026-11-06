@@ -322,6 +322,33 @@ test("the table: with none cached, `trouble` hears why there is none (a 404 isn'
   assert.equal(heard.length, 4, "a 404, 401 or 403 is a server without the table, not trouble");
 });
 
+test("the table: a cached copy that can't run the line is asked for in full (a call added since)", async () => {
+  const dir = tmp();
+  let mode = "ok", asked = 0;
+  const get = (h) => (h === "cache-control" ? "public, max-age=60" : h === "etag" ? '"c1"' : null);
+  const fetchImpl = async (url, init) => {
+    asked++;
+    if (mode === "hang") return hang(init);
+    if (mode === "slow") await new Promise((resolve, reject) => {   // past the short revalidation
+      const t = setTimeout(resolve, doors.REVALIDATE_TIMEOUT + 500);
+      init.signal.addEventListener("abort", () => { clearTimeout(t); reject(init.signal.reason); });
+    });
+    return { status: 200, ok: true, headers: { get }, text: async () => JSON.stringify(TABLE) };
+  };
+  const heard = [];
+  const at = (now, extra = {}) => ({ origin: ORIGIN, configDir: dir, fetchImpl, now, env: {}, timeout: doors.NEED_TIMEOUT, trouble: (t) => heard.push(t), ...extra });
+  assert.ok(await doors.loadTable(at(0)));
+  assert.ok(await doors.loadTable(at(1000, { can: () => true })));
+  assert.equal(asked, 1, "a copy that runs the line: fresh for its max-age");
+  mode = "slow";
+  assert.ok(await doors.loadTable(at(2000, { can: () => false })));
+  assert.equal(asked, 2, "one that can't: asked, within its max-age too");
+  assert.equal(JSON.parse(fs.readFileSync(doors.cachePath(dir, ORIGIN), "utf8")).fetched_at, 2000, "and the slow answer was waited for");
+  mode = "hang";
+  assert.ok(await doors.loadTable(at(3000, { can: () => false, timeout: 50 })), "no answer: still the old copy");
+  assert.deepEqual(heard.map((t) => t.why), ["no answer in 0.05 s"], "and why the new one didn't come");
+});
+
 test("the table: used as it is for the server's max-age; a revalidation waits only briefly", async () => {
   const dir = tmp();
   const calls = [];
@@ -520,6 +547,41 @@ test("end to end: a new command waits out a slow first answer of the table (a co
     assert.deepEqual(seen, ["/v1/doors.json", "/v1/spaces"]);
     assert.equal(r.out, "");
     assert.equal(r.err, "  No spaces.\n", "an empty list says so, not just done");
+  } finally { s.closeAllConnections(); s.close(); }
+});
+
+test("end to end: a call the server added since the cached table still runs on a slow server", async () => {
+  // The cached table (fresh for its max-age) has no `me get`; the server's new one takes 2.5 s.
+  const OLD = { ...TABLE, services: TABLE.services.map((sv) => ({ ...sv, methods: (sv.methods || []).filter((m) => !(m.cli && /\bme get$/.test(m.cli.command))) })) };
+  let asked = 0;
+  const seen = [];
+  const s = http.createServer((req, res) => {
+    seen.push(req.url);
+    const send = (status, body, headers = {}) => { res.writeHead(status, { "Content-Type": "application/json", ...headers }); res.end(body); };
+    const cache = { "Cache-Control": "public, max-age=60" };
+    if (req.url === "/v1/doors.json") {
+      asked++;
+      if (asked === 1) return send(200, JSON.stringify(OLD), { ...cache, ETag: '"old"' });
+      if (asked === 2) return setTimeout(() => send(200, JSON.stringify(TABLE), { ...cache, ETag: '"new"' }), 2500);
+      return send(503, "<html>busy</html>");
+    }
+    if (req.url.startsWith("/v1/spaces")) return send(200, "{}");
+    if (req.url === "/v1/me") return send(200, '{"account":{"handle":"james"}}');
+    send(404, '{"code":"not_found","message":"no such route"}');
+  });
+  await new Promise((r) => s.listen(0, "127.0.0.1", r));
+  const env = { SPACESHEEP_ORIGIN: `http://127.0.0.1:${s.address().port}`, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    assert.equal((await cli(["spaces", "list"], env)).code, 0);
+    const me = await cli(["me", "get"], env);
+    assert.equal(me.code, 0, me.err);
+    assert.equal(me.out, "account:\n  handle: james\n");
+    assert.deepEqual(seen, ["/v1/doors.json", "/v1/spaces", "/v1/doors.json", "/v1/me"]);
+    // A word no cached table has, and the server can't say: why, not today's help.
+    const notes = await cli(["notes", "list"], env);
+    assert.equal(notes.code, 1);
+    assert.equal(notes.out, "");
+    assert.match(notes.err, /didn't come: HTTP 503/);
   } finally { s.closeAllConnections(); s.close(); }
 });
 

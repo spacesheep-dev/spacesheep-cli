@@ -540,18 +540,21 @@ async function door(argv) {
       probe = !known;
     }
     // A word that isn't one of today's commands runs from the table or not at all: with
-    // none cached, it waits out a slow server, and says so if the table still doesn't come.
+    // no cached copy that runs this line, it waits out a slow server, and says so if the
+    // table still doesn't come.
     table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT }
-      : commands[word] ? where : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; } });
+      : commands[word] ? where
+      : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => !!doors.match(t, argv) });
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
-  if (!table) {
-    if (!trouble) return null;
+  const didntCome = () => {
     console.error(`\n  ✗ The server's list of commands didn't come: ${trouble.why}, from ${trouble.url}.\n    "${word}" isn't one of this CLI's own commands, so it needs that list. Try again in a moment;\n    \`spacesheep --help\` lists this CLI's own commands.\n`);
     return 1;
-  }
+  };
+  if (!table) return trouble ? didntCome() : null;
   const found = doors.match(table, argv);
   if (!found) {
     if (commands[word]) return null;
+    if (trouble) return didntCome();   // an older copy that doesn't have it: no answer about the new one
     const verbs = doors.nounHelp(table, word);
     if (!verbs) return null;
     process.stdout.write(verbs);
