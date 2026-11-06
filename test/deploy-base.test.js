@@ -11,6 +11,7 @@ const conf = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-conf-"));
 process.env.SPACESHEEP_CONFIG_DIR = conf;
 const { deploy, clashWords } = require("../lib/deploy");
 const { savedBase } = require("../lib/bases");
+const { read } = require("../lib/read");
 
 const ORIGIN = "https://mcp.example/mcp";
 function page(pin) {
@@ -63,6 +64,13 @@ function fakeSpace(start) {
   return {
     get head() { return head; },
     files: () => versions.get(head),
+    /** list_versions and read_space as main answers them (an editor's Discussion first). */
+    versions: () => ({ versions: [...versions.keys()].reverse().map((sha, i) => ({ sha, latest: i === 0 })) }),
+    read(args) {
+      const sha = args.version || head;
+      const files = Object.entries(versions.get(sha)).map(([p, c]) => `--- ${p} (${Buffer.byteLength(c)} bytes) ---\n${c}`);
+      return `--- discussion ---\nB: working on the second paragraph\n--- end of discussion ---\n\n${args.version ? `Version "v" deployed now (sha ${sha})\n\n` : ""}${files.join("\n\n")}`;
+    },
     /** Someone else's save, on the server. */
     edit(fn) { const t = { ...versions.get(head) }; fn(t); return put(t); },
     upload: async (url, init) => {
@@ -162,14 +170,60 @@ test("a second deploy after a merge keeps the server's own file and lines", asyn
   assert.equal(three.sent.base_sha, built);
   assert.ok(three.r.merged, "merged again, not replaced");
   assert.equal(savedBase(at(dir)), built);
-  // The server's part brought here, and deployed on the live version as the merge line
-  // says: now the folder is what is live, and the next deploy builds on that.
-  body(dir, ["A, mine", "B, mine", "C, theirs"]);
-  fs.writeFileSync(path.join(dir, "notes.html"), "theirs");
-  const four = await run(dir, { base: space.head }, answers, ORIGIN, space.upload);
-  assert.equal(four.r.merged, undefined);
+  // The server's part brought here with read -o, as the merge line says: the folder is
+  // now what is live, so a plain deploy builds on that and publishes it as it is.
+  const live9 = space.head;
+  await read({ url: ORIGIN, call: async (n, a) => (n === "list_versions" ? space.versions() : space.read(a)) }, "sp-1", { dir });
+  assert.equal(fs.readFileSync(path.join(dir, "notes.html"), "utf-8"), "theirs");
+  assert.equal(savedBase(at(dir)), live9);
+  const four = await go();
+  assert.deepEqual([four.sent.base_sha, four.r.merged], [live9, undefined]);
+  assert.deepEqual(space.files(), live);
   const five = await go();
   assert.equal(five.sent.base_sha, four.r.sha);
+});
+
+test("a second writer reads the page, changes it and deploys with no sha: merged with what landed", async () => {
+  const space = fakeSpace({ "index.html": "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n" });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-read-"));
+  const reader = { url: ORIGIN, call: async (n, a) => (n === "list_versions" ? space.versions() : space.read(a)) };
+  const got = await read(reader, "sp-1", { dir });
+  assert.equal(got.sha, "v1");
+  assert.deepEqual(fs.readdirSync(dir).sort(), ["index.html"], "the Discussion isn't a file");
+  assert.equal(fs.readFileSync(path.join(dir, "index.html"), "utf-8"), space.files()["index.html"], "byte for byte, last newline too");
+  // Meanwhile the first writer changes another line.
+  space.edit((t) => { t["index.html"] = t["index.html"].replace("<p>A</p>", "<p>A, first</p>"); });
+  body(dir, ["A", "B, second", "C"]);
+  const { sent, r } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v1");
+  assert.ok(r.merged);
+  assert.match(space.files()["index.html"], /<p>A, first<\/p>\n<p>B, second<\/p>\n<p>C<\/p>/);
+});
+
+test("read -o as a viewer reads the live page with no base: viewers can't list versions", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-view-"));
+  const calls = [];
+  const viewer = { url: ORIGIN, call: async (n, a) => {
+    calls.push([n, a]);
+    return n === "list_versions" ? "This space's version history is readable only by its owner and editors." : "--- index.html (3 bytes) ---\nhi\n";
+  } };
+  const got = await read(viewer, "sp-1", { dir });
+  assert.equal(got.sha, null);
+  assert.deepEqual(calls[1], ["read_space", { uuid: "sp-1" }]);
+  assert.equal(fs.readFileSync(path.join(dir, "index.html"), "utf-8"), "hi\n");
+  assert.equal(savedBase(at(dir)), null);
+});
+
+test("after a kept-base merge, a clash says the folder lacks the merged part, keeping both first", async () => {
+  const dir = page({ space: "sp-1" });
+  await run(dir, {}, { deploy: published("one111") });
+  await run(dir, {}, { deploy: published("two222", { merged: { base_sha: "one111", server_sha: "srv000", merged: ["index.html"], kept: [] } }) });
+  const clash = { error: "conflict", message: "These parts changed on both sides.", conflicts: [{ path: "index.html", why: "both_changed", lines: [[3, 4]] }], base_sha: "one111", server_sha: "two222" };
+  await assert.rejects(run(dir, {}, { deploy: clash }), (e) => {
+    assert.match(e.message, /This folder's last deploy was merged with changes made on the server \(into two222\), and this folder doesn't have them/);
+    assert.ok(e.message.indexOf("To keep both") < e.message.indexOf("--replace"), "keeping both comes first");
+    return true;
+  });
 });
 
 test("a merge on the server's own guess of the base keeps that base", async () => {
@@ -187,7 +241,7 @@ test("a merge with no base known holds the folder: no deploy from it until it na
   assert.equal(savedBase(at(dir)), null);
   await assert.rejects(run(dir, {}, { deploy: published("qqq555") }), (e) => {
     assert.match(e.message, /merged with edits made on the server, into version ppp444/);
-    assert.match(e.message, /spacesheep read sp-1 -o <folder>, put your changes in, then deploy with --base ppp444/);
+    assert.match(e.message, /spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1/);
     assert.match(e.message, /--replace/);
     assert.equal(e.calls.length, 0, "nothing uploaded or deployed");
     return true;
@@ -227,8 +281,10 @@ test("a clash says the live sha, the parts, and how to go on, and saves nothing"
     assert.match(e.message, /live version: srv222 \(yours was built on kkk111\)/);
     assert.match(e.message, /index\.html: changed on both sides \(lines 3, 7-9\)/);
     assert.match(e.message, /logo\.png: can't be merged \(not text\)/);
-    assert.match(e.message, /on purpose: spacesheep deploy .* --replace/);
-    assert.match(e.message, /To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy .* --base srv222/);
+    assert.match(e.message, /To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1\n/);
+    assert.match(e.message, /To publish yours over the live version, erasing the changes made there: spacesheep deploy .* --replace$/);
+    assert.ok(e.message.indexOf("To keep both") < e.message.indexOf("--replace"), "keeping both comes first");
+    assert.doesNotMatch(e.message, /last deploy was merged/);
     return true;
   });
   assert.equal(savedBase({ origin: ORIGIN, space: "sp-1", dir }), "kkk111");
@@ -246,8 +302,8 @@ test("no_base, today's JSON and a door's ErrorInfo alike, says how to go on", as
     });
     await assert.rejects(run(dir, {}, { deploy: () => { throw door; } }), (e) => {
       assert.match(e.message, /^A save needs its parent/);
-      assert.match(e.message, /on purpose: spacesheep deploy .* --replace/);
-      assert.match(e.message, /--base <its sha>/);
+      assert.match(e.message, /erasing the changes made there: spacesheep deploy .* --replace/);
+      assert.match(e.message, /then spacesheep deploy <folder> --space sp-1/);
       return true;
     });
   }

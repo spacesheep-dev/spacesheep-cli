@@ -69,7 +69,7 @@ const HELP = `
     spacesheep whoami                      who the stored key belongs to
     spacesheep deploy [dir|file] [opts]    publish a folder (needs index.html) or one .html file
     spacesheep list                        your spaces
-    spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
+    spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder to deploy from
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep delete <space> [--yes]      delete one of your spaces and every version of it (can't be undone);
@@ -154,8 +154,8 @@ const HELP = `
     --org <slug>             publish under an organization with its own address (not a Team: use --team)
     -m, --message <text>     version name shown in the space's history
     --base <sha>             the version your files are built on: anything published since is merged
-                             in (default: what this folder last published from this machine)
-    --replace                publish over the live version on purpose (its newest version as --base)
+                             in (default: what this folder last published or read on this machine)
+    --replace                publish over the live version on purpose, erasing changes made there
     --json                   print the server's JSON result
 
   Auth
@@ -314,21 +314,9 @@ const commands = {
   async read(opts) {
     const [space, file] = opts._;
     if (!space) throw new Error("usage: spacesheep read <space> [path] [-o dir]");
-    const r = await client().call("read_space", file ? { uuid: space, path: file } : { uuid: space });
-    const text = typeof r === "string" ? r : JSON.stringify(r, null, 2);
-    // The tool answers "--- path (N bytes) ---\n<content>" per file.
-    const parts = text.split(/^--- (.+?)(?: \(\d+ bytes\))? ---\n/m);
-    const files = [];
-    for (let i = 1; i + 1 < parts.length; i += 2) files.push({ path: parts[i], content: parts[i + 1].replace(/\n$/, "") });
-    if (opts.json) return out(files.length ? files : text);
+    const { files, text } = await require("../lib/read").read(client(), space, { file, dir: opts.json ? null : opts.out, log });
+    if (opts.json) return out(files.length ? files.map((f) => ({ path: f.path, content: f.content.toString("utf-8") })) : text);
     if (!opts.out) return process.stdout.write(text.endsWith("\n") ? text : text + "\n");
-    if (!files.length) throw new Error(text);
-    for (const f of files) {
-      const p = path.join(opts.out, f.path);
-      fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, f.content);
-      log(`  ↓ ${f.path}`);
-    }
   },
   async versions(opts) {
     if (!opts._[0]) throw new Error("usage: spacesheep versions <space>");
