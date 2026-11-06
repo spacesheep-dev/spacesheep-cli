@@ -1,0 +1,5192 @@
+{
+ "services": [
+  {
+   "service": "AccountService",
+   "methods": [
+    {
+     "method": "GetAccount",
+     "service": "AccountService",
+     "doc": "Your account: name, @handle, picture, plan and settings.",
+     "verb": "Get",
+     "noun": "Account",
+     "http": "GET",
+     "path": "/v1/me",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep me get",
+      "usage": "spacesheep me get",
+      "replaces": [],
+      "args": [],
+      "flags": []
+     },
+     "account": true,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [],
+     "response": "GetAccountResponse"
+    }
+   ]
+  },
+  {
+   "service": "ApiKeyService",
+   "methods": [
+    {
+     "method": "RevokeApiKey",
+     "service": "ApiKeyService",
+     "doc": "Revoke a key: anything using it stops on its next call.",
+     "verb": "Revoke",
+     "noun": "ApiKey",
+     "http": "POST",
+     "path": "/v1/me/apiKeys/{api_key.id}:revoke",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep api-keys revoke",
+      "usage": "spacesheep api-keys revoke <api_key>",
+      "replaces": [],
+      "args": [
+       "api_key"
+      ],
+      "flags": []
+     },
+     "account": true,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "key=api_key"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "api_key",
+       "type": "api key id",
+       "required": true,
+       "doc": "One of your API keys: its id.",
+       "doc_from": "ApiKeyRef",
+       "limits": [],
+       "at": [
+        "api_key"
+       ],
+       "ref": "id"
+      }
+     ],
+     "response": "RevokeApiKeyResponse"
+    }
+   ]
+  },
+  {
+   "service": "StreamService",
+   "methods": [
+    {
+     "method": "ListStreams",
+     "service": "StreamService",
+     "doc": "Your streams and their latest values.",
+     "verb": "List",
+     "noun": "Stream",
+     "http": "GET",
+     "path": "/v1/me/streams",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep streams list",
+      "usage": "spacesheep streams list [flags]",
+      "replaces": [],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--after",
+        "input": "after",
+        "type": "text",
+        "required": false,
+        "doc": "Where to start: the last page's `next`. The first page when left out."
+       },
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many at most; 50 when left out, for every list.",
+        "limits": [
+         "1 to 200"
+        ]
+       },
+       {
+        "flag": "--prefix",
+        "input": "prefix",
+        "type": "text",
+        "required": false,
+        "doc": "Only streams under this name (lab-work/); a whole name gives that one stream."
+       },
+       {
+        "flag": "--points",
+        "input": "points",
+        "type": "integer",
+        "required": false,
+        "doc": "How many recent points of each stream; its latest value when left out.",
+        "limits": [
+         "0 to 300"
+        ]
+       },
+       {
+        "flag": "--health",
+        "input": "health",
+        "type": "true or false",
+        "required": false,
+        "doc": "Why a page isn't streaming: each stream's last hour, refused pushes and the tabs watching."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "streams",
+       "when": null,
+       "renamed": [
+        "path=prefix",
+        "n=points"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "after",
+       "type": "text",
+       "required": false,
+       "doc": "Where to start: the last page's `next`. The first page when left out.",
+       "limits": [],
+       "at": [
+        "page",
+        "after"
+       ]
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many at most; 50 when left out, for every list.",
+       "limits": [
+        "1 to 200"
+       ],
+       "range": {
+        "min": 1,
+        "max": 200
+       },
+       "at": [
+        "page",
+        "limit"
+       ]
+      },
+      {
+       "name": "prefix",
+       "type": "text",
+       "required": false,
+       "doc": "Only streams under this name (lab-work/); a whole name gives that one stream.",
+       "limits": [],
+       "at": [
+        "prefix"
+       ]
+      },
+      {
+       "name": "points",
+       "type": "integer",
+       "required": false,
+       "doc": "How many recent points of each stream; its latest value when left out.",
+       "limits": [
+        "0 to 300"
+       ],
+       "range": {
+        "min": 0,
+        "max": 300
+       },
+       "at": [
+        "points"
+       ]
+      },
+      {
+       "name": "health",
+       "type": "true or false",
+       "required": false,
+       "doc": "Why a page isn't streaming: each stream's last hour, refused pushes and the tabs watching.",
+       "limits": [],
+       "at": [
+        "health"
+       ]
+      }
+     ],
+     "response": "ListStreamsResponse"
+    },
+    {
+     "method": "PushStream",
+     "service": "StreamService",
+     "doc": "Push a stream's next value. The first push creates it. A machine's job, with a streams-only key.",
+     "verb": "Push",
+     "noun": "Stream",
+     "http": "POST",
+     "path": "/v1/me/streams/{stream}:push",
+     "where": "body",
+     "callers": [
+      "machine"
+     ],
+     "machine_tokens": [
+      "streams key"
+     ],
+     "cli": {
+      "command": "spacesheep streams push",
+      "usage": "spacesheep streams push <stream> --value <JSON value>",
+      "replaces": [],
+      "args": [
+       "stream"
+      ],
+      "flags": [
+       {
+        "flag": "--value",
+        "input": "value",
+        "type": "JSON value",
+        "required": true,
+        "json": true,
+        "doc": "The value: a number, text, or any JSON."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "stream",
+       "type": "text",
+       "required": true,
+       "doc": "The stream: lab/gpu-1, up to 8 segments.",
+       "limits": [],
+       "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*){0,7}$",
+       "at": [
+        "stream"
+       ]
+      },
+      {
+       "name": "value",
+       "type": "JSON value",
+       "required": true,
+       "doc": "The value: a number, text, or any JSON.",
+       "json": true,
+       "limits": [],
+       "at": [
+        "value"
+       ]
+      }
+     ],
+     "response": "PushStreamResponse"
+    }
+   ]
+  },
+  {
+   "service": "SessionService",
+   "methods": [
+    {
+     "method": "ListSessions",
+     "service": "SessionService",
+     "doc": "Your sessions, newest first: what each is doing and on which computer.",
+     "verb": "List",
+     "noun": "Session",
+     "http": "GET",
+     "path": "/v1/me/sessions",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "list_sessions",
+      "title": "List sessions",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 70,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "after": {
+         "type": "string",
+         "description": "Where to start: the last page's `next`. The first page when left out. (text)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 200,
+         "description": "How many at most; 50 when left out, for every list. (integer; 1 to 200)"
+        },
+        "source": {
+         "type": "string",
+         "description": "Only this harness's: claude-code, codex. (text)"
+        },
+        "state": {
+         "type": "string",
+         "enum": [
+          "working",
+          "needs_you",
+          "idle",
+          "done"
+         ],
+         "description": "Only sessions in this state. (one of working, needs_you, idle, done)"
+        },
+        "machine": {
+         "type": "string",
+         "description": "Only this computer's. (text)"
+        },
+        "since": {
+         "type": "string",
+         "description": "Only sessions active since then. (time)"
+        }
+       },
+       "additionalProperties": false,
+       "required": []
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "sessions": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "title": {
+            "type": "string"
+           },
+           "machine": {
+            "type": "string"
+           },
+           "last_at": {
+            "type": "string",
+            "format": "date-time"
+           }
+          }
+         }
+        },
+        "page": {
+         "type": "object",
+         "properties": {
+          "next": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep sessions list",
+      "usage": "spacesheep sessions list [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep sessions list",
+        "when": null,
+        "renamed": [
+         "offset=after"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--after",
+        "input": "after",
+        "type": "text",
+        "required": false,
+        "doc": "Where to start: the last page's `next`. The first page when left out."
+       },
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many at most; 50 when left out, for every list.",
+        "limits": [
+         "1 to 200"
+        ]
+       },
+       {
+        "flag": "--source",
+        "input": "source",
+        "type": "text",
+        "required": false,
+        "doc": "Only this harness's: claude-code, codex."
+       },
+       {
+        "flag": "--state",
+        "input": "state",
+        "type": "one of working, needs_you, idle, done",
+        "required": false,
+        "doc": "Only sessions in this state."
+       },
+       {
+        "flag": "--machine",
+        "input": "machine",
+        "type": "text",
+        "required": false,
+        "doc": "Only this computer's."
+       },
+       {
+        "flag": "--since",
+        "input": "since",
+        "type": "time",
+        "required": false,
+        "doc": "Only sessions active since then."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "offset=after"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "after",
+       "type": "text",
+       "required": false,
+       "doc": "Where to start: the last page's `next`. The first page when left out.",
+       "limits": [],
+       "at": [
+        "page",
+        "after"
+       ]
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many at most; 50 when left out, for every list.",
+       "limits": [
+        "1 to 200"
+       ],
+       "range": {
+        "min": 1,
+        "max": 200
+       },
+       "at": [
+        "page",
+        "limit"
+       ]
+      },
+      {
+       "name": "source",
+       "type": "text",
+       "required": false,
+       "doc": "Only this harness's: claude-code, codex.",
+       "limits": [],
+       "at": [
+        "source"
+       ]
+      },
+      {
+       "name": "state",
+       "type": "one of working, needs_you, idle, done",
+       "required": false,
+       "doc": "Only sessions in this state.",
+       "enum": "SessionState",
+       "limits": [],
+       "at": [
+        "state"
+       ]
+      },
+      {
+       "name": "machine",
+       "type": "text",
+       "required": false,
+       "doc": "Only this computer's.",
+       "limits": [],
+       "at": [
+        "machine"
+       ]
+      },
+      {
+       "name": "since",
+       "type": "time",
+       "required": false,
+       "doc": "Only sessions active since then.",
+       "limits": [],
+       "at": [
+        "since"
+       ]
+      }
+     ],
+     "response": "ListSessionsResponse"
+    }
+   ]
+  },
+  {
+   "service": "SessionDetailService",
+   "methods": [
+    {
+     "method": "GetSession",
+     "service": "SessionDetailService",
+     "doc": "One of your coding sessions: its state changes, tool calls, kept turns, spaces it published and its share.",
+     "verb": "Get",
+     "noun": "Session",
+     "http": "GET",
+     "path": "/v1/me/sessions/{session.id}",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "get_session",
+      "title": "Get session",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 106,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "session": {
+         "type": "string",
+         "description": "Your session: its id, bare or as source:id, from the list of sessions. (session id)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 100,
+         "description": "How many recent entries of each kind; 20 when left out. (integer; 0 to 100)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "session"
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "session": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "title": {
+           "type": "string"
+          },
+          "machine": {
+           "type": "string"
+          },
+          "last_at": {
+           "type": "string",
+           "format": "date-time"
+          }
+         }
+        },
+        "events": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "what": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "turns": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "role": {
+            "type": "string"
+           },
+           "text": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "spaces": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "space": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           },
+           "url": {
+            "type": "string"
+           },
+           "versions": {
+            "type": "integer"
+           },
+           "first_at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "last_at": {
+            "type": "string",
+            "format": "date-time"
+           }
+          }
+         }
+        },
+        "share": {
+         "type": "object",
+         "properties": {
+          "url": {
+           "type": "string"
+          },
+          "access": {
+           "type": "string"
+          },
+          "team": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "people": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep sessions get",
+      "usage": "spacesheep sessions get <session> [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep sessions get",
+        "when": null,
+        "renamed": [
+         "1=session",
+         "source="
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "session"
+      ],
+      "flags": [
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many recent entries of each kind; 20 when left out.",
+        "limits": [
+         "0 to 100"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "session_id=session",
+      "source="
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "session",
+       "type": "session id",
+       "required": true,
+       "doc": "Your session: its id, bare or as source:id, from the list of sessions.",
+       "limits": [],
+       "at": [
+        "session"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many recent entries of each kind; 20 when left out.",
+       "limits": [
+        "0 to 100"
+       ],
+       "range": {
+        "min": 0,
+        "max": 100
+       },
+       "at": [
+        "limit"
+       ]
+      }
+     ],
+     "response": "GetSessionResponse"
+    },
+    {
+     "method": "ExportSessions",
+     "service": "SessionDetailService",
+     "doc": "Every one of your coding sessions, complete, as one zip: a secret download link for an hour.",
+     "verb": "Export",
+     "noun": "Session",
+     "http": "GET",
+     "path": "/v1/me/sessions:export",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "export_sessions",
+      "title": "Export sessions",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [
+       "box"
+      ],
+      "description_chars": 92,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "since": {
+         "type": "string",
+         "description": "Only sessions active since then, for an incremental backup. Every session when left out. (time)"
+        }
+       },
+       "additionalProperties": false,
+       "required": []
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "download_url": {
+         "type": "string"
+        },
+        "curl_command": {
+         "type": "string"
+        },
+        "expires_at": {
+         "type": "string",
+         "format": "date-time"
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep sessions export",
+      "usage": "spacesheep sessions export [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep sessions export",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--since",
+        "input": "since",
+        "type": "time",
+        "required": false,
+        "doc": "Only sessions active since then, for an incremental backup. Every session when left out."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "since",
+       "type": "time",
+       "required": false,
+       "doc": "Only sessions active since then, for an incremental backup. Every session when left out.",
+       "limits": [],
+       "at": [
+        "since"
+       ]
+      }
+     ],
+     "response": "ExportSessionsResponse"
+    }
+   ]
+  },
+  {
+   "service": "TalkService",
+   "methods": [
+    {
+     "method": "CreateTalkListener",
+     "service": "TalkService",
+     "doc": "Let you message this session from Spacesheep: a secret listen link for 24 hours, and commands to wait on it.",
+     "verb": "Create",
+     "noun": "TalkListener",
+     "http": "POST",
+     "path": "/v1/me/talkListeners",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep talk-listeners create",
+      "usage": "spacesheep talk-listeners create --session <session id>",
+      "replaces": [
+       {
+        "command": "spacesheep talk listen",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--session",
+        "input": "session",
+        "type": "session id",
+        "required": true,
+        "env": [
+         "CLAUDE_CODE_SESSION_ID",
+         "CODEX_SESSION_ID"
+        ],
+        "doc": "Your session: its id, bare or as source:id, e.g. $CLAUDE_CODE_SESSION_ID. Never a guess."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "talk_listen",
+       "when": null,
+       "renamed": [
+        "session_id=session"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "session",
+       "type": "session id",
+       "required": true,
+       "doc": "Your session: its id, bare or as source:id, e.g. $CLAUDE_CODE_SESSION_ID. Never a guess.",
+       "limits": [],
+       "at": [
+        "talk_listener",
+        "session"
+       ],
+       "ref": "id"
+      }
+     ],
+     "response": "CreateTalkListenerResponse"
+    },
+    {
+     "method": "CreateTalkMessage",
+     "service": "TalkService",
+     "doc": "Answer in your Talk window. An answer to a comment on a space is posted under that comment too.",
+     "verb": "Create",
+     "noun": "TalkMessage",
+     "http": "POST",
+     "path": "/v1/me/talkMessages",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep talk-messages create",
+      "usage": "spacesheep talk-messages create --session <session id> --text <text> [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep talk reply",
+        "when": null,
+        "renamed": [
+         "1=text",
+         "to=reply_to"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--session",
+        "input": "session",
+        "type": "session id",
+        "required": true,
+        "env": [
+         "CLAUDE_CODE_SESSION_ID",
+         "CODEX_SESSION_ID"
+        ],
+        "doc": "Your session: the one your listener was made for, its id bare or as source:id."
+       },
+       {
+        "flag": "--text",
+        "input": "text",
+        "type": "text",
+        "required": true,
+        "doc": "Your answer, plain text: what you did, or the one question you need answered.",
+        "limits": [
+         "at most 4,000 characters"
+        ]
+       },
+       {
+        "flag": "--reply-to",
+        "input": "reply_to",
+        "type": "64-bit whole number",
+        "required": false,
+        "doc": "The message it answers (its listen line's id). The newest message to the session when left out.",
+        "limits": [
+         "at least 0"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "talk_reply",
+       "when": null,
+       "renamed": [
+        "session_id=session",
+        "message_id=reply_to"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "session",
+       "type": "session id",
+       "required": true,
+       "doc": "Your session: the one your listener was made for, its id bare or as source:id.",
+       "limits": [],
+       "at": [
+        "talk_message",
+        "session"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "text",
+       "type": "text",
+       "required": true,
+       "doc": "Your answer, plain text: what you did, or the one question you need answered.",
+       "limits": [
+        "at most 4,000 characters"
+       ],
+       "at": [
+        "talk_message",
+        "text"
+       ]
+      },
+      {
+       "name": "reply_to",
+       "type": "64-bit whole number",
+       "required": false,
+       "doc": "The message it answers (its listen line's id). The newest message to the session when left out.",
+       "limits": [
+        "at least 0"
+       ],
+       "range": {
+        "min": 0
+       },
+       "at": [
+        "talk_message",
+        "reply_to"
+       ]
+      }
+     ],
+     "response": "CreateTalkMessageResponse"
+    },
+    {
+     "method": "GetTalkSettings",
+     "service": "TalkService",
+     "doc": "Whether you can message your coding sessions from Spacesheep, and whether your plan allows it.",
+     "verb": "Get",
+     "noun": "TalkSettings",
+     "http": "GET",
+     "path": "/v1/me/talkSettings",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep talk-settings get",
+      "usage": "spacesheep talk-settings get",
+      "replaces": [
+       {
+        "command": "spacesheep talk status",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       },
+       {
+        "command": "spacesheep talk",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": []
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "talk_settings",
+       "when": null,
+       "renamed": [],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [],
+     "response": "GetTalkSettingsResponse"
+    },
+    {
+     "method": "UpdateTalkSettings",
+     "service": "TalkService",
+     "doc": "Turn messaging your coding sessions from Spacesheep on or off. Off ends every listener.",
+     "verb": "Update",
+     "noun": "TalkSettings",
+     "http": "PATCH",
+     "path": "/v1/me/talkSettings",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep talk-settings update",
+      "usage": "spacesheep talk-settings update [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep talk on",
+        "when": null,
+        "renamed": [],
+        "set": [
+         "enabled=true"
+        ],
+        "retired": null
+       },
+       {
+        "command": "spacesheep talk off",
+        "when": null,
+        "renamed": [],
+        "set": [
+         "enabled=false"
+        ],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--enabled",
+        "input": "enabled",
+        "type": "true or false",
+        "required": false,
+        "doc": "On or off. Off ends every listener. On needs Pro or Team."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "talk_settings",
+       "when": "enabled",
+       "renamed": [],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": {
+      "field": "talk_settings",
+      "paths": [
+       "enabled"
+      ]
+     },
+     "inputs": [
+      {
+       "name": "enabled",
+       "type": "true or false",
+       "required": false,
+       "doc": "On or off. Off ends every listener. On needs Pro or Team.",
+       "limits": [],
+       "at": [
+        "talk_settings",
+        "enabled"
+       ]
+      }
+     ],
+     "response": "UpdateTalkSettingsResponse"
+    }
+   ]
+  },
+  {
+   "service": "SecretService",
+   "methods": [
+    {
+     "method": "UpdateSecret",
+     "service": "SecretService",
+     "doc": "Set a secret for your worker spaces, a team or a config group, replacing its value if it has one.",
+     "verb": "Update",
+     "noun": "Secret",
+     "http": "PATCH",
+     "path": "/v1/me/secrets/{secret.id}",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep secrets update",
+      "usage": "spacesheep secrets update <secret> [flags]",
+      "replaces": [],
+      "args": [
+       "secret"
+      ],
+      "flags": [
+       {
+        "flag": "--value",
+        "input": "value",
+        "type": "text",
+        "required": false,
+        "secret": true,
+        "doc": "Its value. Written, never read back: no answer carries it."
+       },
+       {
+        "flag": "--allowed-urls",
+        "input": "allowed_urls",
+        "type": "list of text",
+        "required": false,
+        "doc": "The URL prefixes a worker's fetch() may send it to. Anywhere when empty."
+       },
+       {
+        "flag": "--team",
+        "input": "team",
+        "type": "team name",
+        "required": false,
+        "doc": "A team's secret, for every space and agent on the team. Team owners only. Yours when left out."
+       },
+       {
+        "flag": "--team-id",
+        "input": "team_id",
+        "type": "team id",
+        "required": false,
+        "doc": "`team` by its id, instead of its name."
+       },
+       {
+        "flag": "--config-group",
+        "input": "config_group",
+        "type": "config group name",
+        "required": false,
+        "doc": "A config group's secret, for its members' agents and integrations, never worker code. Its owner only."
+       },
+       {
+        "flag": "--config-group-id",
+        "input": "config_group_id",
+        "type": "config group id",
+        "required": false,
+        "doc": "`config_group` by its id, instead of its name."
+       }
+      ]
+     },
+     "account": true,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "set_secret",
+       "when": null,
+       "renamed": [
+        "name=secret",
+        "scope=",
+        "org=team",
+        "group=config_group"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": {
+      "field": "secret",
+      "paths": [
+       "value",
+       "allowed_urls"
+      ]
+     },
+     "inputs": [
+      {
+       "name": "secret",
+       "type": "secret id",
+       "ref": "id",
+       "required": true,
+       "doc": "The secret to change.",
+       "limits": [],
+       "at": [
+        "secret",
+        "id"
+       ],
+       "selects": true
+      },
+      {
+       "name": "value",
+       "type": "text",
+       "required": false,
+       "doc": "Its value. Written, never read back: no answer carries it.",
+       "secret": true,
+       "limits": [],
+       "at": [
+        "secret",
+        "value"
+       ]
+      },
+      {
+       "name": "allowed_urls",
+       "type": "list of text",
+       "required": false,
+       "doc": "The URL prefixes a worker's fetch() may send it to. Anywhere when empty.",
+       "limits": [],
+       "at": [
+        "secret",
+        "allowed_urls"
+       ]
+      },
+      {
+       "name": "team",
+       "type": "team name",
+       "required": false,
+       "doc": "A team's secret, for every space and agent on the team. Team owners only. Yours when left out.",
+       "limits": [],
+       "at": [
+        "team"
+       ],
+       "ref": "name"
+      },
+      {
+       "name": "team_id",
+       "type": "team id",
+       "required": false,
+       "doc": "`team` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "team"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "config_group",
+       "type": "config group name",
+       "required": false,
+       "doc": "A config group's secret, for its members' agents and integrations, never worker code. Its owner only.",
+       "limits": [],
+       "at": [
+        "config_group"
+       ],
+       "ref": "name"
+      },
+      {
+       "name": "config_group_id",
+       "type": "config group id",
+       "required": false,
+       "doc": "`config_group` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "config_group"
+       ],
+       "ref": "id"
+      }
+     ],
+     "response": "UpdateSecretResponse"
+    }
+   ]
+  },
+  {
+   "service": "SpaceService",
+   "methods": [
+    {
+     "method": "GetSpace",
+     "service": "SpaceService",
+     "doc": "A space's details: title, address, who can open it and its head version.",
+     "verb": "Get",
+     "noun": "Space",
+     "http": "GET",
+     "path": "/v1/spaces/{space.id}",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep spaces get",
+      "usage": "spacesheep spaces get <space>",
+      "replaces": [],
+      "args": [
+       "space"
+      ],
+      "flags": []
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "uuid=space"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its link, @handle/slug or uuid.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space",
+       "positional": true
+      }
+     ],
+     "response": "GetSpaceResponse"
+    },
+    {
+     "method": "UpdateSpace",
+     "service": "SpaceService",
+     "doc": "Change a space's title, emoji, description or who can open it. Its files don't change.",
+     "verb": "Update",
+     "noun": "Space",
+     "http": "PATCH",
+     "path": "/v1/spaces/{space.id}",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep spaces update",
+      "usage": "spacesheep spaces update <space> [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep share",
+        "when": "visibility",
+        "renamed": [
+         "1=space"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "space"
+      ],
+      "flags": [
+       {
+        "flag": "--title",
+        "input": "title",
+        "type": "a title",
+        "required": false,
+        "doc": "Its title, as lists and link previews show it.",
+        "limits": [
+         "at most 200 characters"
+        ]
+       },
+       {
+        "flag": "--emoji",
+        "input": "emoji",
+        "type": "text",
+        "required": false,
+        "doc": "One emoji.",
+        "limits": [
+         "at most 16 characters"
+        ]
+       },
+       {
+        "flag": "--description",
+        "input": "description",
+        "type": "text",
+        "required": false,
+        "doc": "One line on what it is.",
+        "limits": [
+         "at most 300 characters"
+        ]
+       },
+       {
+        "flag": "--visibility",
+        "input": "visibility",
+        "type": "one of private, members, signed_in, public",
+        "required": false,
+        "doc": "Who can open a space."
+       },
+       {
+        "flag": "--listed",
+        "input": "listed",
+        "type": "true or false",
+        "required": false,
+        "doc": "Listed in search and on the owner's profile (public spaces only)."
+       },
+       {
+        "flag": "--team",
+        "input": "team",
+        "type": "team name",
+        "required": false,
+        "doc": "Its team, when it lives in one."
+       },
+       {
+        "flag": "--team-id",
+        "input": "team_id",
+        "type": "team id",
+        "required": false,
+        "doc": "`team` by its id, instead of its name."
+       },
+       {
+        "flag": "--team-access",
+        "input": "team_access",
+        "type": "one of view, edit",
+        "required": false,
+        "doc": "With a team: what its members may do. View (read and comment) when left out."
+       },
+       {
+        "flag": "--design-system",
+        "input": "design_system",
+        "type": "text",
+        "required": false,
+        "doc": "A design system of yours, by name or id: later edits keep its look."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "share_space",
+       "when": "visibility",
+       "renamed": [
+        "uuid=space"
+       ],
+       "set": [],
+       "retired": null
+      },
+      {
+       "tool": "share_space",
+       "when": "team",
+       "renamed": [
+        "uuid=space"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": {
+      "field": "space",
+      "paths": [
+       "title",
+       "emoji",
+       "description",
+       "visibility",
+       "listed",
+       "team",
+       "team_access",
+       "design_system"
+      ]
+     },
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "ref": "name",
+       "required": false,
+       "either": "space",
+       "doc": "The space to change.",
+       "limits": [],
+       "at": [
+        "space",
+        "name"
+       ],
+       "selects": true,
+       "positional": true
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "ref": "id",
+       "required": false,
+       "either": "space",
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space",
+        "id"
+       ],
+       "selects": true,
+       "positional": true
+      },
+      {
+       "name": "title",
+       "type": "a title",
+       "required": false,
+       "doc": "Its title, as lists and link previews show it.",
+       "limits": [
+        "at most 200 characters"
+       ],
+       "at": [
+        "space",
+        "title"
+       ]
+      },
+      {
+       "name": "emoji",
+       "type": "text",
+       "required": false,
+       "doc": "One emoji.",
+       "limits": [
+        "at most 16 characters"
+       ],
+       "at": [
+        "space",
+        "emoji"
+       ]
+      },
+      {
+       "name": "description",
+       "type": "text",
+       "required": false,
+       "doc": "One line on what it is.",
+       "limits": [
+        "at most 300 characters"
+       ],
+       "at": [
+        "space",
+        "description"
+       ]
+      },
+      {
+       "name": "visibility",
+       "type": "one of private, members, signed_in, public",
+       "required": false,
+       "doc": "Who can open a space.",
+       "doc_from": "Visibility",
+       "enum": "Visibility",
+       "limits": [],
+       "at": [
+        "space",
+        "visibility"
+       ]
+      },
+      {
+       "name": "listed",
+       "type": "true or false",
+       "required": false,
+       "doc": "Listed in search and on the owner's profile (public spaces only).",
+       "limits": [],
+       "at": [
+        "space",
+        "listed"
+       ]
+      },
+      {
+       "name": "team",
+       "type": "team name",
+       "required": false,
+       "doc": "Its team, when it lives in one.",
+       "limits": [],
+       "at": [
+        "space",
+        "team"
+       ],
+       "ref": "name"
+      },
+      {
+       "name": "team_id",
+       "type": "team id",
+       "required": false,
+       "doc": "`team` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space",
+        "team"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "team_access",
+       "type": "one of view, edit",
+       "required": false,
+       "doc": "With a team: what its members may do. View (read and comment) when left out.",
+       "enum": "TeamAccess",
+       "limits": [],
+       "at": [
+        "space",
+        "team_access"
+       ]
+      },
+      {
+       "name": "design_system",
+       "type": "text",
+       "required": false,
+       "doc": "A design system of yours, by name or id: later edits keep its look.",
+       "limits": [],
+       "at": [
+        "space",
+        "design_system"
+       ]
+      }
+     ],
+     "response": "UpdateSpaceResponse"
+    },
+    {
+     "method": "ListSpaces",
+     "service": "SpaceService",
+     "doc": "Every space you own or can open, newest first.",
+     "verb": "List",
+     "noun": "Space",
+     "http": "GET",
+     "path": "/v1/spaces",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "list_spaces",
+      "title": "List spaces",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 46,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "after": {
+         "type": "string",
+         "description": "Where to start: the last page's `next`. The first page when left out. (text)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 200,
+         "description": "How many at most; 50 when left out, for every list. (integer; 1 to 200)"
+        },
+        "include_archived": {
+         "type": "boolean",
+         "description": "Archived spaces too, each marked `archived` (card 4). Off: they stay out, as archiving's docs say. (true or false)"
+        }
+       },
+       "additionalProperties": false,
+       "required": []
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "spaces": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "name": {
+            "type": "string"
+           },
+           "title": {
+            "type": "string"
+           },
+           "emoji": {
+            "type": "string"
+           },
+           "description": {
+            "type": "string"
+           },
+           "visibility": {
+            "type": "string"
+           },
+           "listed": {
+            "type": "boolean"
+           },
+           "owner": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           },
+           "team": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             }
+            }
+           },
+           "url": {
+            "type": "string"
+           },
+           "head": {
+            "type": "object",
+            "properties": {
+             "id": {
+              "type": "string"
+             }
+            }
+           },
+           "updated_at": {
+            "type": "string",
+            "format": "date-time"
+           },
+           "team_access": {
+            "type": "string"
+           },
+           "design_system": {
+            "type": "string"
+           },
+           "archived": {
+            "type": "boolean"
+           }
+          }
+         }
+        },
+        "page": {
+         "type": "object",
+         "properties": {
+          "next": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep spaces list",
+      "usage": "spacesheep spaces list [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep list",
+        "when": null,
+        "renamed": [],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--after",
+        "input": "after",
+        "type": "text",
+        "required": false,
+        "doc": "Where to start: the last page's `next`. The first page when left out."
+       },
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many at most; 50 when left out, for every list.",
+        "limits": [
+         "1 to 200"
+        ]
+       },
+       {
+        "flag": "--include-archived",
+        "input": "include_archived",
+        "type": "true or false",
+        "required": false,
+        "doc": "Archived spaces too, each marked `archived` (card 4). Off: they stay out, as archiving's docs say."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": true,
+     "replaces": [],
+     "renamed": [
+      "offset=after"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "after",
+       "type": "text",
+       "required": false,
+       "doc": "Where to start: the last page's `next`. The first page when left out.",
+       "limits": [],
+       "at": [
+        "page",
+        "after"
+       ]
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many at most; 50 when left out, for every list.",
+       "limits": [
+        "1 to 200"
+       ],
+       "range": {
+        "min": 1,
+        "max": 200
+       },
+       "at": [
+        "page",
+        "limit"
+       ]
+      },
+      {
+       "name": "include_archived",
+       "type": "true or false",
+       "required": false,
+       "doc": "Archived spaces too, each marked `archived` (card 4). Off: they stay out, as archiving's docs say.",
+       "limits": [],
+       "at": [
+        "include_archived"
+       ]
+      }
+     ],
+     "response": "ListSpacesResponse"
+    },
+    {
+     "method": "CreateSpace",
+     "service": "SpaceService",
+     "doc": "Publish files as a new space: one HTML page, or a folder with an index.html. Private unless you say.",
+     "verb": "Create",
+     "noun": "Space",
+     "http": "POST",
+     "path": "/v1/spaces",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "create_space",
+      "title": "Create space",
+      "annotations": {
+       "readOnlyHint": false,
+       "destructiveHint": false,
+       "idempotentHint": false,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 100,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "title": {
+         "type": "string",
+         "description": "Its title, as lists and link previews show it. (a title; at most 200 characters)"
+        },
+        "emoji": {
+         "type": "string",
+         "description": "One emoji. (text; at most 16 characters)"
+        },
+        "description": {
+         "type": "string",
+         "description": "One line on what it is. (text; at most 300 characters)"
+        },
+        "visibility": {
+         "type": "string",
+         "enum": [
+          "private",
+          "members",
+          "signed_in",
+          "public"
+         ],
+         "description": "Who can open a space. (one of private, members, signed_in, public)"
+        },
+        "listed": {
+         "type": "boolean",
+         "description": "Listed in search and on the owner's profile (public spaces only). (true or false)"
+        },
+        "team": {
+         "type": "string",
+         "description": "Its team, when it lives in one. (team name)"
+        },
+        "team_id": {
+         "type": "string",
+         "description": "`team` by its id, instead of its name. (team id)"
+        },
+        "team_access": {
+         "type": "string",
+         "enum": [
+          "view",
+          "edit"
+         ],
+         "description": "With a team: what its members may do. View (read and comment) when left out. (one of view, edit)"
+        },
+        "design_system": {
+         "type": "string",
+         "description": "A design system of yours, by name or id: later edits keep its look. (text)"
+        },
+        "files": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string",
+            "description": "Its path inside the space: index.html, img/hero.jpg. (text; at most 512 characters)"
+           },
+           "content": {
+            "type": "string",
+            "description": "Text, as it is. (HTML)"
+           },
+           "staged_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{12}$",
+            "description": "What an upload staged: its staged sha. (text)"
+           },
+           "data": {
+            "type": "string",
+            "description": "Small binary files only; anything bigger goes through an upload. (bytes)"
+           }
+          },
+          "required": [
+           "path"
+          ],
+          "additionalProperties": false
+         },
+         "description": "Its files: an index.html at least. (list of files)"
+        },
+        "label": {
+         "type": "string",
+         "description": "What this version is, in a few words. (text; at most 80 characters)"
+        },
+        "client": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string",
+           "description": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt. (text)"
+          },
+          "version": {
+           "type": "string",
+           "description": "Your harness's version. (text)"
+          },
+          "model": {
+           "type": "string",
+           "description": "The model id you run as, if you know it. (text)"
+          },
+          "session_id": {
+           "type": "string",
+           "description": "Your harness's session id, only one you actually read. (text)"
+          },
+          "machine": {
+           "type": "string",
+           "description": "The machine's hostname. (text)"
+          },
+          "url": {
+           "type": "string",
+           "description": "A link that opens this session, if your harness gives one. (text)"
+          },
+          "account_id": {
+           "type": "string",
+           "description": "The harness account's id, never an email. (text)"
+          },
+          "org_id": {
+           "type": "string",
+           "description": "That account's org or workspace id. (text)"
+          },
+          "repo": {
+           "type": "string",
+           "description": "The working directory's git remote. (text)"
+          },
+          "branch": {
+           "type": "string",
+           "description": "Its branch. (text)"
+          },
+          "commit": {
+           "type": "string",
+           "description": "Its short HEAD sha. (text)"
+          },
+          "extra": {
+           "type": "object",
+           "description": "Other small facts that identify the session (entrypoint, OS); never secrets. (JSON object)"
+          },
+          "transport": {
+           "type": "string",
+           "description": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli. (text)"
+          },
+          "user_agent": {
+           "type": "string",
+           "description": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent. (text)"
+          },
+          "other": {
+           "type": "string",
+           "description": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent. (text)"
+          }
+         },
+         "additionalProperties": false,
+         "description": "What published it: your harness, session and machine (card 7). (client)"
+        },
+        "slug": {
+         "type": "string",
+         "description": "Its address after @you/; made from the title when left out. (text; at most 80 characters)"
+        },
+        "people": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "Share it with them as it's made: emails or @handles. (list of person name)"
+        },
+        "people_ids": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "`people` by their ids, instead of their names. (list of person id)"
+        },
+        "org": {
+         "type": "string",
+         "description": "An Enterprise organization to publish under, by slug or id (a team is `team`). (text)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "files"
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "name": {
+           "type": "string"
+          },
+          "title": {
+           "type": "string"
+          },
+          "emoji": {
+           "type": "string"
+          },
+          "description": {
+           "type": "string"
+          },
+          "visibility": {
+           "type": "string"
+          },
+          "listed": {
+           "type": "boolean"
+          },
+          "owner": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "team": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "url": {
+           "type": "string"
+          },
+          "head": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            }
+           }
+          },
+          "updated_at": {
+           "type": "string",
+           "format": "date-time"
+          },
+          "team_access": {
+           "type": "string"
+          },
+          "design_system": {
+           "type": "string"
+          },
+          "archived": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep spaces create",
+      "usage": "spacesheep spaces create <title> --files <list of files> [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep deploy",
+        "when": null,
+        "renamed": [
+         "message=label"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "title"
+      ],
+      "flags": [
+       {
+        "flag": "--emoji",
+        "input": "emoji",
+        "type": "text",
+        "required": false,
+        "doc": "One emoji.",
+        "limits": [
+         "at most 16 characters"
+        ]
+       },
+       {
+        "flag": "--description",
+        "input": "description",
+        "type": "text",
+        "required": false,
+        "doc": "One line on what it is.",
+        "limits": [
+         "at most 300 characters"
+        ]
+       },
+       {
+        "flag": "--visibility",
+        "input": "visibility",
+        "type": "one of private, members, signed_in, public",
+        "required": false,
+        "doc": "Who can open a space."
+       },
+       {
+        "flag": "--listed",
+        "input": "listed",
+        "type": "true or false",
+        "required": false,
+        "doc": "Listed in search and on the owner's profile (public spaces only)."
+       },
+       {
+        "flag": "--team",
+        "input": "team",
+        "type": "team name",
+        "required": false,
+        "doc": "Its team, when it lives in one."
+       },
+       {
+        "flag": "--team-id",
+        "input": "team_id",
+        "type": "team id",
+        "required": false,
+        "doc": "`team` by its id, instead of its name."
+       },
+       {
+        "flag": "--team-access",
+        "input": "team_access",
+        "type": "one of view, edit",
+        "required": false,
+        "doc": "With a team: what its members may do. View (read and comment) when left out."
+       },
+       {
+        "flag": "--design-system",
+        "input": "design_system",
+        "type": "text",
+        "required": false,
+        "doc": "A design system of yours, by name or id: later edits keep its look."
+       },
+       {
+        "flag": "--files",
+        "input": "files",
+        "type": "list of files",
+        "required": true,
+        "json": true,
+        "doc": "Its files: an index.html at least.",
+        "fields": [
+         {
+          "name": "path",
+          "type": "text",
+          "required": true,
+          "doc": "Its path inside the space: index.html, img/hero.jpg."
+         },
+         {
+          "name": "content",
+          "type": "HTML",
+          "required": false,
+          "doc": "Text, as it is."
+         },
+         {
+          "name": "staged_sha",
+          "type": "text",
+          "required": false,
+          "doc": "What an upload staged: its staged sha."
+         },
+         {
+          "name": "data",
+          "type": "bytes",
+          "required": false,
+          "doc": "Small binary files only; anything bigger goes through an upload."
+         }
+        ]
+       },
+       {
+        "flag": "--label",
+        "input": "label",
+        "type": "text",
+        "required": false,
+        "doc": "What this version is, in a few words.",
+        "limits": [
+         "at most 80 characters"
+        ]
+       },
+       {
+        "flag": "--client",
+        "input": "client",
+        "type": "client",
+        "required": false,
+        "json": true,
+        "doc": "What published it: your harness, session and machine (card 7).",
+        "fields": [
+         {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt."
+         },
+         {
+          "name": "version",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness's version."
+         },
+         {
+          "name": "model",
+          "type": "text",
+          "required": false,
+          "doc": "The model id you run as, if you know it."
+         },
+         {
+          "name": "session_id",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness's session id, only one you actually read."
+         },
+         {
+          "name": "machine",
+          "type": "text",
+          "required": false,
+          "doc": "The machine's hostname."
+         },
+         {
+          "name": "url",
+          "type": "text",
+          "required": false,
+          "doc": "A link that opens this session, if your harness gives one."
+         },
+         {
+          "name": "account_id",
+          "type": "text",
+          "required": false,
+          "doc": "The harness account's id, never an email."
+         },
+         {
+          "name": "org_id",
+          "type": "text",
+          "required": false,
+          "doc": "That account's org or workspace id."
+         },
+         {
+          "name": "repo",
+          "type": "text",
+          "required": false,
+          "doc": "The working directory's git remote."
+         },
+         {
+          "name": "branch",
+          "type": "text",
+          "required": false,
+          "doc": "Its branch."
+         },
+         {
+          "name": "commit",
+          "type": "text",
+          "required": false,
+          "doc": "Its short HEAD sha."
+         },
+         {
+          "name": "extra",
+          "type": "JSON object",
+          "required": false,
+          "doc": "Other small facts that identify the session (entrypoint, OS); never secrets."
+         },
+         {
+          "name": "transport",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli."
+         },
+         {
+          "name": "user_agent",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent."
+         },
+         {
+          "name": "other",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent."
+         }
+        ]
+       },
+       {
+        "flag": "--slug",
+        "input": "slug",
+        "type": "text",
+        "required": false,
+        "doc": "Its address after @you/; made from the title when left out.",
+        "limits": [
+         "at most 80 characters"
+        ]
+       },
+       {
+        "flag": "--people",
+        "input": "people",
+        "type": "list of person name",
+        "required": false,
+        "doc": "Share it with them as it's made: emails or @handles."
+       },
+       {
+        "flag": "--people-ids",
+        "input": "people_ids",
+        "type": "list of person id",
+        "required": false,
+        "doc": "`people` by their ids, instead of their names."
+       },
+       {
+        "flag": "--org",
+        "input": "org",
+        "type": "text",
+        "required": false,
+        "doc": "An Enterprise organization to publish under, by slug or id (a team is `team`)."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "deploy",
+       "when": null,
+       "renamed": [
+        "version_name=label",
+        "access.visibility=visibility",
+        "access.emails=people",
+        "session=client"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "title",
+       "type": "a title",
+       "required": false,
+       "doc": "Its title, as lists and link previews show it.",
+       "limits": [
+        "at most 200 characters"
+       ],
+       "at": [
+        "space",
+        "title"
+       ]
+      },
+      {
+       "name": "emoji",
+       "type": "text",
+       "required": false,
+       "doc": "One emoji.",
+       "limits": [
+        "at most 16 characters"
+       ],
+       "at": [
+        "space",
+        "emoji"
+       ]
+      },
+      {
+       "name": "description",
+       "type": "text",
+       "required": false,
+       "doc": "One line on what it is.",
+       "limits": [
+        "at most 300 characters"
+       ],
+       "at": [
+        "space",
+        "description"
+       ]
+      },
+      {
+       "name": "visibility",
+       "type": "one of private, members, signed_in, public",
+       "required": false,
+       "doc": "Who can open a space.",
+       "doc_from": "Visibility",
+       "enum": "Visibility",
+       "limits": [],
+       "at": [
+        "space",
+        "visibility"
+       ]
+      },
+      {
+       "name": "listed",
+       "type": "true or false",
+       "required": false,
+       "doc": "Listed in search and on the owner's profile (public spaces only).",
+       "limits": [],
+       "at": [
+        "space",
+        "listed"
+       ]
+      },
+      {
+       "name": "team",
+       "type": "team name",
+       "required": false,
+       "doc": "Its team, when it lives in one.",
+       "limits": [],
+       "at": [
+        "space",
+        "team"
+       ],
+       "ref": "name"
+      },
+      {
+       "name": "team_id",
+       "type": "team id",
+       "required": false,
+       "doc": "`team` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space",
+        "team"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "team_access",
+       "type": "one of view, edit",
+       "required": false,
+       "doc": "With a team: what its members may do. View (read and comment) when left out.",
+       "enum": "TeamAccess",
+       "limits": [],
+       "at": [
+        "space",
+        "team_access"
+       ]
+      },
+      {
+       "name": "design_system",
+       "type": "text",
+       "required": false,
+       "doc": "A design system of yours, by name or id: later edits keep its look.",
+       "limits": [],
+       "at": [
+        "space",
+        "design_system"
+       ]
+      },
+      {
+       "name": "files",
+       "type": "list of files",
+       "required": true,
+       "doc": "Its files: an index.html at least.",
+       "json": true,
+       "fields": [
+        {
+         "name": "path",
+         "type": "text",
+         "required": true,
+         "doc": "Its path inside the space: index.html, img/hero.jpg.",
+         "limits": [
+          "at most 512 characters"
+         ],
+         "at": [
+          "path"
+         ]
+        },
+        {
+         "name": "content",
+         "type": "HTML",
+         "required": false,
+         "doc": "Text, as it is.",
+         "limits": [],
+         "at": [
+          "content"
+         ]
+        },
+        {
+         "name": "staged_sha",
+         "type": "text",
+         "required": false,
+         "doc": "What an upload staged: its staged sha.",
+         "limits": [],
+         "pattern": "^[0-9a-f]{12}$",
+         "at": [
+          "staged_sha"
+         ]
+        },
+        {
+         "name": "data",
+         "type": "bytes",
+         "required": false,
+         "doc": "Small binary files only; anything bigger goes through an upload.",
+         "limits": [],
+         "at": [
+          "data"
+         ]
+        }
+       ],
+       "limits": [],
+       "at": [
+        "files"
+       ]
+      },
+      {
+       "name": "label",
+       "type": "text",
+       "required": false,
+       "doc": "What this version is, in a few words.",
+       "limits": [
+        "at most 80 characters"
+       ],
+       "at": [
+        "label"
+       ]
+      },
+      {
+       "name": "client",
+       "type": "client",
+       "required": false,
+       "doc": "What published it: your harness, session and machine (card 7).",
+       "json": true,
+       "fields": [
+        {
+         "name": "name",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt.",
+         "limits": [],
+         "at": [
+          "name"
+         ]
+        },
+        {
+         "name": "version",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness's version.",
+         "limits": [],
+         "at": [
+          "version"
+         ]
+        },
+        {
+         "name": "model",
+         "type": "text",
+         "required": false,
+         "doc": "The model id you run as, if you know it.",
+         "limits": [],
+         "at": [
+          "model"
+         ]
+        },
+        {
+         "name": "session_id",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness's session id, only one you actually read.",
+         "limits": [],
+         "at": [
+          "session_id"
+         ]
+        },
+        {
+         "name": "machine",
+         "type": "text",
+         "required": false,
+         "doc": "The machine's hostname.",
+         "limits": [],
+         "at": [
+          "machine"
+         ]
+        },
+        {
+         "name": "url",
+         "type": "text",
+         "required": false,
+         "doc": "A link that opens this session, if your harness gives one.",
+         "limits": [],
+         "at": [
+          "url"
+         ]
+        },
+        {
+         "name": "account_id",
+         "type": "text",
+         "required": false,
+         "doc": "The harness account's id, never an email.",
+         "limits": [],
+         "at": [
+          "account_id"
+         ]
+        },
+        {
+         "name": "org_id",
+         "type": "text",
+         "required": false,
+         "doc": "That account's org or workspace id.",
+         "limits": [],
+         "at": [
+          "org_id"
+         ]
+        },
+        {
+         "name": "repo",
+         "type": "text",
+         "required": false,
+         "doc": "The working directory's git remote.",
+         "limits": [],
+         "at": [
+          "repo"
+         ]
+        },
+        {
+         "name": "branch",
+         "type": "text",
+         "required": false,
+         "doc": "Its branch.",
+         "limits": [],
+         "at": [
+          "branch"
+         ]
+        },
+        {
+         "name": "commit",
+         "type": "text",
+         "required": false,
+         "doc": "Its short HEAD sha.",
+         "limits": [],
+         "at": [
+          "commit"
+         ]
+        },
+        {
+         "name": "extra",
+         "type": "JSON object",
+         "required": false,
+         "doc": "Other small facts that identify the session (entrypoint, OS); never secrets.",
+         "json": true,
+         "limits": [],
+         "at": [
+          "extra"
+         ]
+        },
+        {
+         "name": "transport",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli.",
+         "limits": [],
+         "at": [
+          "transport"
+         ]
+        },
+        {
+         "name": "user_agent",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent.",
+         "limits": [],
+         "at": [
+          "user_agent"
+         ]
+        },
+        {
+         "name": "other",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent.",
+         "limits": [],
+         "at": [
+          "other"
+         ]
+        }
+       ],
+       "limits": [],
+       "at": [
+        "client"
+       ]
+      },
+      {
+       "name": "slug",
+       "type": "text",
+       "required": false,
+       "doc": "Its address after @you/; made from the title when left out.",
+       "limits": [
+        "at most 80 characters"
+       ],
+       "at": [
+        "slug"
+       ]
+      },
+      {
+       "name": "people",
+       "type": "list of person name",
+       "required": false,
+       "doc": "Share it with them as it's made: emails or @handles.",
+       "limits": [],
+       "at": [
+        "people"
+       ],
+       "ref": "name"
+      },
+      {
+       "name": "people_ids",
+       "type": "list of person id",
+       "required": false,
+       "doc": "`people` by their ids, instead of their names.",
+       "limits": [],
+       "at": [
+        "people"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "org",
+       "type": "text",
+       "required": false,
+       "doc": "An Enterprise organization to publish under, by slug or id (a team is `team`).",
+       "limits": [],
+       "at": [
+        "org"
+       ]
+      }
+     ],
+     "response": "CreateSpaceResponse"
+    },
+    {
+     "method": "ShareSpace",
+     "service": "SpaceService",
+     "doc": "Share a space with people by email or @handle. They can open it; with `editor`, change it too.",
+     "verb": "Share",
+     "noun": "Space",
+     "http": "POST",
+     "path": "/v1/spaces/{space.id}:share",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "share_space",
+      "title": "Share space",
+      "annotations": {
+       "readOnlyHint": false,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": true
+      },
+      "refused": [],
+      "description_chars": 94,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "string",
+         "description": "The space: its address, @handle/slug, or its link. (space name)"
+        },
+        "space_id": {
+         "type": "string",
+         "description": "`space` by its id, instead of its name. (space id)"
+        },
+        "people": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "Who: emails or @handles. (list of person name)"
+        },
+        "people_ids": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "`people` by their ids, instead of their names. (list of person id)"
+        },
+        "role": {
+         "type": "string",
+         "enum": [
+          "edit",
+          "view"
+         ],
+         "description": "What they may do; edit when left out. (one of edit, view)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [],
+       "allOf": [
+        {
+         "anyOf": [
+          {
+           "required": [
+            "space"
+           ]
+          },
+          {
+           "required": [
+            "space_id"
+           ]
+          }
+         ]
+        },
+        {
+         "anyOf": [
+          {
+           "required": [
+            "people"
+           ]
+          },
+          {
+           "required": [
+            "people_ids"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "shared": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "name": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "refused": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep spaces share",
+      "usage": "spacesheep spaces share <space> (--people <list of person name> | --people-ids <list of person id>) [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep share",
+        "when": null,
+        "renamed": [
+         "1=space",
+         "email=people"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "space"
+      ],
+      "flags": [
+       {
+        "flag": "--people",
+        "input": "people",
+        "type": "list of person name",
+        "required": false,
+        "either": "people",
+        "doc": "Who: emails or @handles."
+       },
+       {
+        "flag": "--people-ids",
+        "input": "people_ids",
+        "type": "list of person id",
+        "required": false,
+        "either": "people",
+        "doc": "`people` by their ids, instead of their names."
+       },
+       {
+        "flag": "--role",
+        "input": "role",
+        "type": "one of edit, view",
+        "required": false,
+        "doc": "What they may do; edit when left out."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "uuid=space",
+      "emails=people"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "people",
+       "type": "list of person name",
+       "required": false,
+       "doc": "Who: emails or @handles.",
+       "limits": [],
+       "at": [
+        "people"
+       ],
+       "ref": "name",
+       "either": "people"
+      },
+      {
+       "name": "people_ids",
+       "type": "list of person id",
+       "required": false,
+       "doc": "`people` by their ids, instead of their names.",
+       "limits": [],
+       "at": [
+        "people"
+       ],
+       "ref": "id",
+       "either": "people"
+      },
+      {
+       "name": "role",
+       "type": "one of edit, view",
+       "required": false,
+       "doc": "What they may do; edit when left out.",
+       "enum": "ShareRole",
+       "limits": [],
+       "at": [
+        "role"
+       ]
+      }
+     ],
+     "response": "ShareSpaceResponse"
+    },
+    {
+     "method": "DeleteSpace",
+     "service": "SpaceService",
+     "doc": "Delete a space and every file in it, for good. Owner only.",
+     "verb": "Delete",
+     "noun": "Space",
+     "http": "DELETE",
+     "path": "/v1/spaces/{space.id}",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "delete_space",
+      "title": "Delete space",
+      "annotations": {
+       "readOnlyHint": false,
+       "destructiveHint": true,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 58,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "string",
+         "description": "The space: its address, @handle/slug, or its link. (space name)"
+        },
+        "space_id": {
+         "type": "string",
+         "description": "`space` by its id, instead of its name. (space id)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [],
+       "allOf": [
+        {
+         "anyOf": [
+          {
+           "required": [
+            "space"
+           ]
+          },
+          {
+           "required": [
+            "space_id"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     },
+     "cli": {
+      "command": "spacesheep spaces delete",
+      "usage": "spacesheep spaces delete <space>",
+      "replaces": [
+       {
+        "command": "spacesheep delete",
+        "when": null,
+        "renamed": [
+         "1=space",
+         "yes="
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "space"
+      ],
+      "flags": []
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [],
+     "renamed": [
+      "uuid=space"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space",
+       "positional": true
+      }
+     ],
+     "response": "DeleteSpaceResponse"
+    }
+   ]
+  },
+  {
+   "service": "VersionService",
+   "methods": [
+    {
+     "method": "ListVersions",
+     "service": "VersionService",
+     "doc": "A space's history, newest first: each version's label, time, author and what published it.",
+     "verb": "List",
+     "noun": "Version",
+     "http": "GET",
+     "path": "/v1/spaces/{space.id}/versions",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep versions list",
+      "usage": "spacesheep versions list (--space <space name> | --space-id <space id>) [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep versions",
+        "when": null,
+        "renamed": [
+         "1=space"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--space",
+        "input": "space",
+        "type": "space name",
+        "required": false,
+        "either": "space",
+        "doc": "The space: its address, @handle/slug, or its link."
+       },
+       {
+        "flag": "--space-id",
+        "input": "space_id",
+        "type": "space id",
+        "required": false,
+        "either": "space",
+        "doc": "`space` by its id, instead of its name."
+       },
+       {
+        "flag": "--after",
+        "input": "after",
+        "type": "text",
+        "required": false,
+        "doc": "Where to start: the last page's `next`. The first page when left out."
+       },
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many at most; 50 when left out, for every list.",
+        "limits": [
+         "1 to 200"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": true,
+     "replaces": [],
+     "renamed": [
+      "uuid=space"
+     ],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space"
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space"
+      },
+      {
+       "name": "after",
+       "type": "text",
+       "required": false,
+       "doc": "Where to start: the last page's `next`. The first page when left out.",
+       "limits": [],
+       "at": [
+        "page",
+        "after"
+       ]
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many at most; 50 when left out, for every list.",
+       "limits": [
+        "1 to 200"
+       ],
+       "range": {
+        "min": 1,
+        "max": 200
+       },
+       "at": [
+        "page",
+        "limit"
+       ]
+      }
+     ],
+     "response": "ListVersionsResponse"
+    },
+    {
+     "method": "CreateVersion",
+     "service": "VersionService",
+     "doc": "Publish a new version of a space you can edit: its whole set of files, or exact changes to the current ones.",
+     "verb": "Create",
+     "noun": "Version",
+     "http": "POST",
+     "path": "/v1/spaces/{space.id}/versions",
+     "where": "body",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "create_version",
+      "title": "Create version",
+      "annotations": {
+       "readOnlyHint": false,
+       "destructiveHint": false,
+       "idempotentHint": false,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 108,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "string",
+         "description": "The space: its address, @handle/slug, or its link. (space name)"
+        },
+        "space_id": {
+         "type": "string",
+         "description": "`space` by its id, instead of its name. (space id)"
+        },
+        "files": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string",
+            "description": "Its path inside the space: index.html, img/hero.jpg. (text; at most 512 characters)"
+           },
+           "content": {
+            "type": "string",
+            "description": "Text, as it is. (HTML)"
+           },
+           "staged_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{12}$",
+            "description": "What an upload staged: its staged sha. (text)"
+           },
+           "data": {
+            "type": "string",
+            "description": "Small binary files only; anything bigger goes through an upload. (bytes)"
+           }
+          },
+          "required": [
+           "path"
+          ],
+          "additionalProperties": false
+         },
+         "description": "Every file of the new version; leave out to send replacements instead. (list of files)"
+        },
+        "label": {
+         "type": "string",
+         "description": "What this version is, in a few words. (text; at most 80 characters)"
+        },
+        "parent": {
+         "type": "string",
+         "description": "The version you read. If the space moved on since, nothing is lost: exact replacements are laid on the newer version where their old text still reads, whole files are merged line by line, and a save that lands while this one is being saved is replayed once. Only a real clash is refused, as `conflict` naming the server's version (card 15). Left out: replacements apply to whatever is current, and files replace it. (version id)"
+        },
+        "replacements": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string",
+            "description": "Its file; index.html when left out. (text)"
+           },
+           "old_string": {
+            "type": "string",
+            "description": "The words to find, exactly. They must appear once, unless replace_all. (text)"
+           },
+           "new_string": {
+            "type": "string",
+            "description": "What goes in their place; empty deletes them. (text)"
+           },
+           "replace_all": {
+            "type": "boolean",
+            "description": "Replace every match, not just one. (true or false)"
+           }
+          },
+          "required": [
+           "old_string"
+          ],
+          "additionalProperties": false
+         },
+         "description": "Exact changes to the current files, instead of sending every file. (list of replacements)"
+        },
+        "client": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string",
+           "description": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt. (text)"
+          },
+          "version": {
+           "type": "string",
+           "description": "Your harness's version. (text)"
+          },
+          "model": {
+           "type": "string",
+           "description": "The model id you run as, if you know it. (text)"
+          },
+          "session_id": {
+           "type": "string",
+           "description": "Your harness's session id, only one you actually read. (text)"
+          },
+          "machine": {
+           "type": "string",
+           "description": "The machine's hostname. (text)"
+          },
+          "url": {
+           "type": "string",
+           "description": "A link that opens this session, if your harness gives one. (text)"
+          },
+          "account_id": {
+           "type": "string",
+           "description": "The harness account's id, never an email. (text)"
+          },
+          "org_id": {
+           "type": "string",
+           "description": "That account's org or workspace id. (text)"
+          },
+          "repo": {
+           "type": "string",
+           "description": "The working directory's git remote. (text)"
+          },
+          "branch": {
+           "type": "string",
+           "description": "Its branch. (text)"
+          },
+          "commit": {
+           "type": "string",
+           "description": "Its short HEAD sha. (text)"
+          },
+          "extra": {
+           "type": "object",
+           "description": "Other small facts that identify the session (entrypoint, OS); never secrets. (JSON object)"
+          },
+          "transport": {
+           "type": "string",
+           "description": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli. (text)"
+          },
+          "user_agent": {
+           "type": "string",
+           "description": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent. (text)"
+          },
+          "other": {
+           "type": "string",
+           "description": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent. (text)"
+          }
+         },
+         "additionalProperties": false,
+         "description": "What published it: your harness, session and machine (card 7). (client)"
+        },
+        "background": {
+         "type": "boolean",
+         "description": "For scheduled refreshes: saved without moving the page up in Recent. (true or false)"
+        },
+        "live_patch": {
+         "type": "array",
+         "items": {
+          "type": "object"
+         },
+         "description": "The edits you already showed with a live push: the save is announced as them, so open tabs keep their page. (list of JSON object)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [],
+       "allOf": [
+        {
+         "anyOf": [
+          {
+           "required": [
+            "space"
+           ]
+          },
+          {
+           "required": [
+            "space_id"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "version": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "label": {
+           "type": "string"
+          },
+          "author": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "via": {
+           "type": "string"
+          },
+          "created_at": {
+           "type": "string",
+           "format": "date-time"
+          },
+          "client": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string"
+            },
+            "version": {
+             "type": "string"
+            },
+            "model": {
+             "type": "string"
+            },
+            "session_id": {
+             "type": "string"
+            },
+            "machine": {
+             "type": "string"
+            },
+            "url": {
+             "type": "string"
+            },
+            "account_id": {
+             "type": "string"
+            },
+            "org_id": {
+             "type": "string"
+            },
+            "repo": {
+             "type": "string"
+            },
+            "branch": {
+             "type": "string"
+            },
+            "commit": {
+             "type": "string"
+            },
+            "extra": {
+             "type": "array",
+             "items": {
+              "type": "object"
+             }
+            },
+            "transport": {
+             "type": "string"
+            },
+            "user_agent": {
+             "type": "string"
+            },
+            "other": {
+             "type": "string"
+            }
+           }
+          }
+         }
+        },
+        "space": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "name": {
+           "type": "string"
+          },
+          "title": {
+           "type": "string"
+          },
+          "emoji": {
+           "type": "string"
+          },
+          "description": {
+           "type": "string"
+          },
+          "visibility": {
+           "type": "string"
+          },
+          "listed": {
+           "type": "boolean"
+          },
+          "owner": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "team": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            }
+           }
+          },
+          "url": {
+           "type": "string"
+          },
+          "head": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string"
+            }
+           }
+          },
+          "updated_at": {
+           "type": "string",
+           "format": "date-time"
+          },
+          "team_access": {
+           "type": "string"
+          },
+          "design_system": {
+           "type": "string"
+          },
+          "archived": {
+           "type": "boolean"
+          }
+         }
+        },
+        "outcome": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep versions create",
+      "usage": "spacesheep versions create (--space <space name> | --space-id <space id>) [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep deploy",
+        "when": "space",
+        "renamed": [
+         "message=label"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--space",
+        "input": "space",
+        "type": "space name",
+        "required": false,
+        "either": "space",
+        "doc": "The space: its address, @handle/slug, or its link."
+       },
+       {
+        "flag": "--space-id",
+        "input": "space_id",
+        "type": "space id",
+        "required": false,
+        "either": "space",
+        "doc": "`space` by its id, instead of its name."
+       },
+       {
+        "flag": "--files",
+        "input": "files",
+        "type": "list of files",
+        "required": false,
+        "json": true,
+        "doc": "Every file of the new version; leave out to send replacements instead.",
+        "fields": [
+         {
+          "name": "path",
+          "type": "text",
+          "required": true,
+          "doc": "Its path inside the space: index.html, img/hero.jpg."
+         },
+         {
+          "name": "content",
+          "type": "HTML",
+          "required": false,
+          "doc": "Text, as it is."
+         },
+         {
+          "name": "staged_sha",
+          "type": "text",
+          "required": false,
+          "doc": "What an upload staged: its staged sha."
+         },
+         {
+          "name": "data",
+          "type": "bytes",
+          "required": false,
+          "doc": "Small binary files only; anything bigger goes through an upload."
+         }
+        ]
+       },
+       {
+        "flag": "--label",
+        "input": "label",
+        "type": "text",
+        "required": false,
+        "doc": "What this version is, in a few words.",
+        "limits": [
+         "at most 80 characters"
+        ]
+       },
+       {
+        "flag": "--parent",
+        "input": "parent",
+        "type": "version id",
+        "required": false,
+        "doc": "The version you read. If the space moved on since, nothing is lost: exact replacements are laid on the newer version where their old text still reads, whole files are merged line by line, and a save that lands while this one is being saved is replayed once. Only a real clash is refused, as `conflict` naming the server's version (card 15). Left out: replacements apply to whatever is current, and files replace it."
+       },
+       {
+        "flag": "--replacements",
+        "input": "replacements",
+        "type": "list of replacements",
+        "required": false,
+        "json": true,
+        "doc": "Exact changes to the current files, instead of sending every file.",
+        "fields": [
+         {
+          "name": "path",
+          "type": "text",
+          "required": false,
+          "doc": "Its file; index.html when left out."
+         },
+         {
+          "name": "old_string",
+          "type": "text",
+          "required": true,
+          "doc": "The words to find, exactly. They must appear once, unless replace_all."
+         },
+         {
+          "name": "new_string",
+          "type": "text",
+          "required": false,
+          "doc": "What goes in their place; empty deletes them."
+         },
+         {
+          "name": "replace_all",
+          "type": "true or false",
+          "required": false,
+          "doc": "Replace every match, not just one."
+         }
+        ]
+       },
+       {
+        "flag": "--client",
+        "input": "client",
+        "type": "client",
+        "required": false,
+        "json": true,
+        "doc": "What published it: your harness, session and machine (card 7).",
+        "fields": [
+         {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt."
+         },
+         {
+          "name": "version",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness's version."
+         },
+         {
+          "name": "model",
+          "type": "text",
+          "required": false,
+          "doc": "The model id you run as, if you know it."
+         },
+         {
+          "name": "session_id",
+          "type": "text",
+          "required": false,
+          "doc": "Your harness's session id, only one you actually read."
+         },
+         {
+          "name": "machine",
+          "type": "text",
+          "required": false,
+          "doc": "The machine's hostname."
+         },
+         {
+          "name": "url",
+          "type": "text",
+          "required": false,
+          "doc": "A link that opens this session, if your harness gives one."
+         },
+         {
+          "name": "account_id",
+          "type": "text",
+          "required": false,
+          "doc": "The harness account's id, never an email."
+         },
+         {
+          "name": "org_id",
+          "type": "text",
+          "required": false,
+          "doc": "That account's org or workspace id."
+         },
+         {
+          "name": "repo",
+          "type": "text",
+          "required": false,
+          "doc": "The working directory's git remote."
+         },
+         {
+          "name": "branch",
+          "type": "text",
+          "required": false,
+          "doc": "Its branch."
+         },
+         {
+          "name": "commit",
+          "type": "text",
+          "required": false,
+          "doc": "Its short HEAD sha."
+         },
+         {
+          "name": "extra",
+          "type": "JSON object",
+          "required": false,
+          "doc": "Other small facts that identify the session (entrypoint, OS); never secrets."
+         },
+         {
+          "name": "transport",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli."
+         },
+         {
+          "name": "user_agent",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent."
+         },
+         {
+          "name": "other",
+          "type": "text",
+          "required": false,
+          "doc": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent."
+         }
+        ]
+       },
+       {
+        "flag": "--background",
+        "input": "background",
+        "type": "true or false",
+        "required": false,
+        "doc": "For scheduled refreshes: saved without moving the page up in Recent."
+       },
+       {
+        "flag": "--live-patch",
+        "input": "live_patch",
+        "type": "list of JSON object",
+        "required": false,
+        "json": true,
+        "doc": "The edits you already showed with a live push: the save is announced as them, so open tabs keep their page."
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "deploy",
+       "when": "uuid",
+       "renamed": [
+        "uuid=space",
+        "base_sha=parent",
+        "version_name=label",
+        "session=client"
+       ],
+       "set": [],
+       "retired": null
+      },
+      {
+       "tool": "edit",
+       "when": null,
+       "renamed": [
+        "uuid=space",
+        "edits=replacements",
+        "base_sha=parent",
+        "version_name=label",
+        "session=client"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space"
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space"
+      },
+      {
+       "name": "files",
+       "type": "list of files",
+       "required": false,
+       "doc": "Every file of the new version; leave out to send replacements instead.",
+       "json": true,
+       "fields": [
+        {
+         "name": "path",
+         "type": "text",
+         "required": true,
+         "doc": "Its path inside the space: index.html, img/hero.jpg.",
+         "limits": [
+          "at most 512 characters"
+         ],
+         "at": [
+          "path"
+         ]
+        },
+        {
+         "name": "content",
+         "type": "HTML",
+         "required": false,
+         "doc": "Text, as it is.",
+         "limits": [],
+         "at": [
+          "content"
+         ]
+        },
+        {
+         "name": "staged_sha",
+         "type": "text",
+         "required": false,
+         "doc": "What an upload staged: its staged sha.",
+         "limits": [],
+         "pattern": "^[0-9a-f]{12}$",
+         "at": [
+          "staged_sha"
+         ]
+        },
+        {
+         "name": "data",
+         "type": "bytes",
+         "required": false,
+         "doc": "Small binary files only; anything bigger goes through an upload.",
+         "limits": [],
+         "at": [
+          "data"
+         ]
+        }
+       ],
+       "limits": [],
+       "at": [
+        "files"
+       ]
+      },
+      {
+       "name": "label",
+       "type": "text",
+       "required": false,
+       "doc": "What this version is, in a few words.",
+       "limits": [
+        "at most 80 characters"
+       ],
+       "at": [
+        "label"
+       ]
+      },
+      {
+       "name": "parent",
+       "type": "version id",
+       "required": false,
+       "doc": "The version you read. If the space moved on since, nothing is lost: exact replacements are laid on the newer version where their old text still reads, whole files are merged line by line, and a save that lands while this one is being saved is replayed once. Only a real clash is refused, as `conflict` naming the server's version (card 15). Left out: replacements apply to whatever is current, and files replace it.",
+       "limits": [],
+       "at": [
+        "parent"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "replacements",
+       "type": "list of replacements",
+       "required": false,
+       "doc": "Exact changes to the current files, instead of sending every file.",
+       "json": true,
+       "fields": [
+        {
+         "name": "path",
+         "type": "text",
+         "required": false,
+         "doc": "Its file; index.html when left out.",
+         "limits": [],
+         "at": [
+          "path"
+         ]
+        },
+        {
+         "name": "old_string",
+         "type": "text",
+         "required": true,
+         "doc": "The words to find, exactly. They must appear once, unless replace_all.",
+         "limits": [],
+         "at": [
+          "old_string"
+         ]
+        },
+        {
+         "name": "new_string",
+         "type": "text",
+         "required": false,
+         "doc": "What goes in their place; empty deletes them.",
+         "limits": [],
+         "at": [
+          "new_string"
+         ]
+        },
+        {
+         "name": "replace_all",
+         "type": "true or false",
+         "required": false,
+         "doc": "Replace every match, not just one.",
+         "limits": [],
+         "at": [
+          "replace_all"
+         ]
+        }
+       ],
+       "limits": [],
+       "at": [
+        "replacements"
+       ]
+      },
+      {
+       "name": "client",
+       "type": "client",
+       "required": false,
+       "doc": "What published it: your harness, session and machine (card 7).",
+       "json": true,
+       "fields": [
+        {
+         "name": "name",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness, lowercase: claude-code, codex, opencode, grok, gemini-cli, cursor, chatgpt.",
+         "limits": [],
+         "at": [
+          "name"
+         ]
+        },
+        {
+         "name": "version",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness's version.",
+         "limits": [],
+         "at": [
+          "version"
+         ]
+        },
+        {
+         "name": "model",
+         "type": "text",
+         "required": false,
+         "doc": "The model id you run as, if you know it.",
+         "limits": [],
+         "at": [
+          "model"
+         ]
+        },
+        {
+         "name": "session_id",
+         "type": "text",
+         "required": false,
+         "doc": "Your harness's session id, only one you actually read.",
+         "limits": [],
+         "at": [
+          "session_id"
+         ]
+        },
+        {
+         "name": "machine",
+         "type": "text",
+         "required": false,
+         "doc": "The machine's hostname.",
+         "limits": [],
+         "at": [
+          "machine"
+         ]
+        },
+        {
+         "name": "url",
+         "type": "text",
+         "required": false,
+         "doc": "A link that opens this session, if your harness gives one.",
+         "limits": [],
+         "at": [
+          "url"
+         ]
+        },
+        {
+         "name": "account_id",
+         "type": "text",
+         "required": false,
+         "doc": "The harness account's id, never an email.",
+         "limits": [],
+         "at": [
+          "account_id"
+         ]
+        },
+        {
+         "name": "org_id",
+         "type": "text",
+         "required": false,
+         "doc": "That account's org or workspace id.",
+         "limits": [],
+         "at": [
+          "org_id"
+         ]
+        },
+        {
+         "name": "repo",
+         "type": "text",
+         "required": false,
+         "doc": "The working directory's git remote.",
+         "limits": [],
+         "at": [
+          "repo"
+         ]
+        },
+        {
+         "name": "branch",
+         "type": "text",
+         "required": false,
+         "doc": "Its branch.",
+         "limits": [],
+         "at": [
+          "branch"
+         ]
+        },
+        {
+         "name": "commit",
+         "type": "text",
+         "required": false,
+         "doc": "Its short HEAD sha.",
+         "limits": [],
+         "at": [
+          "commit"
+         ]
+        },
+        {
+         "name": "extra",
+         "type": "JSON object",
+         "required": false,
+         "doc": "Other small facts that identify the session (entrypoint, OS); never secrets.",
+         "json": true,
+         "limits": [],
+         "at": [
+          "extra"
+         ]
+        },
+        {
+         "name": "transport",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server from the door the call came through; ignored if sent: mcp, api or cli.",
+         "limits": [],
+         "at": [
+          "transport"
+         ]
+        },
+        {
+         "name": "user_agent",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server: the request's User-Agent, cut to 200 characters; ignored if sent.",
+         "limits": [],
+         "at": [
+          "user_agent"
+         ]
+        },
+        {
+         "name": "other",
+         "type": "text",
+         "required": false,
+         "doc": "Set by the server: what else saved it, in today's `via` words (edit, viewer, agent, automation, memory...); ignored if sent.",
+         "limits": [],
+         "at": [
+          "other"
+         ]
+        }
+       ],
+       "limits": [],
+       "at": [
+        "client"
+       ]
+      },
+      {
+       "name": "background",
+       "type": "true or false",
+       "required": false,
+       "doc": "For scheduled refreshes: saved without moving the page up in Recent.",
+       "limits": [],
+       "at": [
+        "background"
+       ]
+      },
+      {
+       "name": "live_patch",
+       "type": "list of JSON object",
+       "required": false,
+       "doc": "The edits you already showed with a live push: the save is announced as them, so open tabs keep their page.",
+       "json": true,
+       "limits": [],
+       "at": [
+        "live_patch"
+       ]
+      }
+     ],
+     "response": "CreateVersionResponse"
+    }
+   ]
+  },
+  {
+   "service": "SpaceRenderService",
+   "methods": [
+    {
+     "method": "ScreenshotSpace",
+     "service": "SpaceRenderService",
+     "doc": "A PNG of a published space as a browser draws it, at any width or of one block, with what failed to load.",
+     "verb": "Screenshot",
+     "noun": "Space",
+     "http": "GET",
+     "path": "/v1/spaces/{space.id}:screenshot",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "cli": {
+      "command": "spacesheep spaces screenshot",
+      "usage": "spacesheep spaces screenshot <space> [flags]",
+      "replaces": [],
+      "args": [
+       "space"
+      ],
+      "flags": [
+       {
+        "flag": "--path",
+        "input": "path",
+        "type": "text",
+        "required": false,
+        "doc": "A page inside it, /notes.html; overrides the link's sub-path.",
+        "limits": [
+         "at most 512 characters"
+        ]
+       },
+       {
+        "flag": "--full-page",
+        "input": "full_page",
+        "type": "true or false",
+        "required": false,
+        "doc": "The whole scrollable page, or only the first screen; the whole page when left out."
+       },
+       {
+        "flag": "--width",
+        "input": "width",
+        "type": "integer",
+        "required": false,
+        "doc": "Viewport width in CSS pixels: 390 for a phone; 1280 when left out.",
+        "limits": [
+         "320 to 1920"
+        ]
+       },
+       {
+        "flag": "--height",
+        "input": "height",
+        "type": "integer",
+        "required": false,
+        "doc": "Viewport height in CSS pixels, the fold; 800 when left out.",
+        "limits": [
+         "320 to 2000"
+        ]
+       },
+       {
+        "flag": "--section",
+        "input": "section",
+        "type": "text",
+        "required": false,
+        "doc": "One block's data-ss-id: only that element is captured.",
+        "limits": [
+         "at most 120 characters"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": false,
+     "replaces": [
+      {
+       "tool": "screenshot",
+       "when": null,
+       "renamed": [
+        "uuid=space"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": {
+      "field": "png",
+      "mime": "image/png",
+      "mime_field": null
+     },
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its link (a sub-path in it is the page), @handle/slug or uuid. Private ones render as you.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space",
+       "positional": true
+      },
+      {
+       "name": "path",
+       "type": "text",
+       "required": false,
+       "doc": "A page inside it, /notes.html; overrides the link's sub-path.",
+       "limits": [
+        "at most 512 characters"
+       ],
+       "at": [
+        "path"
+       ]
+      },
+      {
+       "name": "full_page",
+       "type": "true or false",
+       "required": false,
+       "doc": "The whole scrollable page, or only the first screen; the whole page when left out.",
+       "limits": [],
+       "at": [
+        "full_page"
+       ]
+      },
+      {
+       "name": "width",
+       "type": "integer",
+       "required": false,
+       "doc": "Viewport width in CSS pixels: 390 for a phone; 1280 when left out.",
+       "limits": [
+        "320 to 1920"
+       ],
+       "range": {
+        "min": 320,
+        "max": 1920
+       },
+       "at": [
+        "width"
+       ]
+      },
+      {
+       "name": "height",
+       "type": "integer",
+       "required": false,
+       "doc": "Viewport height in CSS pixels, the fold; 800 when left out.",
+       "limits": [
+        "320 to 2000"
+       ],
+       "range": {
+        "min": 320,
+        "max": 2000
+       },
+       "at": [
+        "height"
+       ]
+      },
+      {
+       "name": "section",
+       "type": "text",
+       "required": false,
+       "doc": "One block's data-ss-id: only that element is captured.",
+       "limits": [
+        "at most 120 characters"
+       ],
+       "at": [
+        "section"
+       ]
+      }
+     ],
+     "response": "ScreenshotSpaceResponse"
+    }
+   ]
+  },
+  {
+   "service": "FileService",
+   "methods": [
+    {
+     "method": "ListFiles",
+     "service": "FileService",
+     "doc": "A space's files and their paths: the current version, or an older one.",
+     "verb": "List",
+     "noun": "File",
+     "http": "GET",
+     "path": "/v1/spaces/{space.id}/files",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "list_files",
+      "title": "List files",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 70,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "string",
+         "description": "The space: its address, @handle/slug, or its link. (space name)"
+        },
+        "space_id": {
+         "type": "string",
+         "description": "`space` by its id, instead of its name. (space id)"
+        },
+        "version": {
+         "type": "string",
+         "description": "An older version; the current one when left out. (version id)"
+        },
+        "after": {
+         "type": "string",
+         "description": "Where to start: the last page's `next`. The first page when left out. (text)"
+        },
+        "limit": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 200,
+         "description": "How many at most; 50 when left out, for every list. (integer; 1 to 200)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [],
+       "allOf": [
+        {
+         "anyOf": [
+          {
+           "required": [
+            "space"
+           ]
+          },
+          {
+           "required": [
+            "space_id"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "files": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string"
+           },
+           "content": {
+            "type": "string"
+           },
+           "staged_sha": {
+            "type": "string"
+           },
+           "data": {
+            "type": "string"
+           }
+          }
+         }
+        },
+        "version": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          }
+         }
+        },
+        "page": {
+         "type": "object",
+         "properties": {
+          "next": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep files list",
+      "usage": "spacesheep files list (--space <space name> | --space-id <space id>) [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep read",
+        "when": null,
+        "renamed": [
+         "1=space"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [],
+      "flags": [
+       {
+        "flag": "--space",
+        "input": "space",
+        "type": "space name",
+        "required": false,
+        "either": "space",
+        "doc": "The space: its address, @handle/slug, or its link."
+       },
+       {
+        "flag": "--space-id",
+        "input": "space_id",
+        "type": "space id",
+        "required": false,
+        "either": "space",
+        "doc": "`space` by its id, instead of its name."
+       },
+       {
+        "flag": "--version",
+        "input": "version",
+        "type": "version id",
+        "required": false,
+        "doc": "An older version; the current one when left out."
+       },
+       {
+        "flag": "--after",
+        "input": "after",
+        "type": "text",
+        "required": false,
+        "doc": "Where to start: the last page's `next`. The first page when left out."
+       },
+       {
+        "flag": "--limit",
+        "input": "limit",
+        "type": "integer",
+        "required": false,
+        "doc": "How many at most; 50 when left out, for every list.",
+        "limits": [
+         "1 to 200"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": true,
+     "replaces": [
+      {
+       "tool": "read_space",
+       "when": null,
+       "renamed": [
+        "uuid=space"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space"
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space"
+      },
+      {
+       "name": "version",
+       "type": "version id",
+       "required": false,
+       "doc": "An older version; the current one when left out.",
+       "limits": [],
+       "at": [
+        "version"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "after",
+       "type": "text",
+       "required": false,
+       "doc": "Where to start: the last page's `next`. The first page when left out.",
+       "limits": [],
+       "at": [
+        "page",
+        "after"
+       ]
+      },
+      {
+       "name": "limit",
+       "type": "integer",
+       "required": false,
+       "doc": "How many at most; 50 when left out, for every list.",
+       "limits": [
+        "1 to 200"
+       ],
+       "range": {
+        "min": 1,
+        "max": 200
+       },
+       "at": [
+        "page",
+        "limit"
+       ]
+      }
+     ],
+     "response": "ListFilesResponse"
+    },
+    {
+     "method": "GetFile",
+     "service": "FileService",
+     "doc": "One file of a space: its contents in the current version, or an older one.",
+     "verb": "Get",
+     "noun": "File",
+     "http": "GET",
+     "path": "/v1/spaces/{space.id}/files/{file}",
+     "where": "query",
+     "callers": [
+      "person",
+      "key",
+      "connector",
+      "agent",
+      "box"
+     ],
+     "machine_tokens": [],
+     "mcp": {
+      "name": "get_file",
+      "title": "Get file",
+      "annotations": {
+       "readOnlyHint": true,
+       "destructiveHint": false,
+       "idempotentHint": true,
+       "openWorldHint": false
+      },
+      "refused": [],
+      "description_chars": 74,
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "space": {
+         "type": "string",
+         "description": "The space: its address, @handle/slug, or its link. (space name)"
+        },
+        "space_id": {
+         "type": "string",
+         "description": "`space` by its id, instead of its name. (space id)"
+        },
+        "file": {
+         "type": "string",
+         "description": "Its path inside the space: index.html, img/hero.jpg. (text; at most 512 characters)"
+        },
+        "version": {
+         "type": "string",
+         "description": "An older version; the current one when left out. (version id)"
+        },
+        "offset": {
+         "type": [
+          "integer",
+          "string"
+         ],
+         "pattern": "^-?[0-9]+$",
+         "description": "From this character on, 60,000 at a time, for a file too long to read whole. (64-bit whole number)"
+        },
+        "query": {
+         "type": "string",
+         "description": "A JSONata expression run over the file on the server; only its result comes back. (text; at most 2,000 characters)"
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "file"
+       ],
+       "allOf": [
+        {
+         "anyOf": [
+          {
+           "required": [
+            "space"
+           ]
+          },
+          {
+           "required": [
+            "space_id"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      "outputSchema": {
+       "type": "object",
+       "properties": {
+        "file": {
+         "type": "object",
+         "properties": {
+          "path": {
+           "type": "string"
+          },
+          "content": {
+           "type": "string"
+          },
+          "staged_sha": {
+           "type": "string"
+          },
+          "data": {
+           "type": "string"
+          }
+         }
+        },
+        "version": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string"
+          }
+         }
+        },
+        "next_offset": {
+         "type": "string",
+         "pattern": "^-?[0-9]+$"
+        }
+       }
+      }
+     },
+     "cli": {
+      "command": "spacesheep files get",
+      "usage": "spacesheep files get <file> (--space <space name> | --space-id <space id>) [flags]",
+      "replaces": [
+       {
+        "command": "spacesheep read",
+        "when": "2",
+        "renamed": [
+         "1=space",
+         "2=file"
+        ],
+        "set": [],
+        "retired": null
+       }
+      ],
+      "args": [
+       "file"
+      ],
+      "flags": [
+       {
+        "flag": "--space",
+        "input": "space",
+        "type": "space name",
+        "required": false,
+        "either": "space",
+        "doc": "The space: its address, @handle/slug, or its link."
+       },
+       {
+        "flag": "--space-id",
+        "input": "space_id",
+        "type": "space id",
+        "required": false,
+        "either": "space",
+        "doc": "`space` by its id, instead of its name."
+       },
+       {
+        "flag": "--version",
+        "input": "version",
+        "type": "version id",
+        "required": false,
+        "doc": "An older version; the current one when left out."
+       },
+       {
+        "flag": "--offset",
+        "input": "offset",
+        "type": "64-bit whole number",
+        "required": false,
+        "doc": "From this character on, 60,000 at a time, for a file too long to read whole."
+       },
+       {
+        "flag": "--query",
+        "input": "query",
+        "type": "text",
+        "required": false,
+        "doc": "A JSONata expression run over the file on the server; only its result comes back.",
+        "limits": [
+         "at most 2,000 characters"
+        ]
+       }
+      ]
+     },
+     "account": false,
+     "read_key": true,
+     "replaces": [
+      {
+       "tool": "read_space",
+       "when": "path",
+       "renamed": [
+        "uuid=space",
+        "path=file"
+       ],
+       "set": [],
+       "retired": null
+      }
+     ],
+     "renamed": [],
+     "answer_bytes": null,
+     "mask": null,
+     "inputs": [
+      {
+       "name": "space",
+       "type": "space name",
+       "required": false,
+       "doc": "The space: its address, @handle/slug, or its link.",
+       "doc_from": "SpaceRef.name",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "name",
+       "either": "space"
+      },
+      {
+       "name": "space_id",
+       "type": "space id",
+       "required": false,
+       "doc": "`space` by its id, instead of its name.",
+       "limits": [],
+       "at": [
+        "space"
+       ],
+       "ref": "id",
+       "either": "space"
+      },
+      {
+       "name": "file",
+       "type": "text",
+       "required": true,
+       "doc": "Its path inside the space: index.html, img/hero.jpg.",
+       "limits": [
+        "at most 512 characters"
+       ],
+       "at": [
+        "file"
+       ]
+      },
+      {
+       "name": "version",
+       "type": "version id",
+       "required": false,
+       "doc": "An older version; the current one when left out.",
+       "limits": [],
+       "at": [
+        "version"
+       ],
+       "ref": "id"
+      },
+      {
+       "name": "offset",
+       "type": "64-bit whole number",
+       "required": false,
+       "doc": "From this character on, 60,000 at a time, for a file too long to read whole.",
+       "limits": [],
+       "at": [
+        "offset"
+       ]
+      },
+      {
+       "name": "query",
+       "type": "text",
+       "required": false,
+       "doc": "A JSONata expression run over the file on the server; only its result comes back.",
+       "limits": [
+        "at most 2,000 characters"
+       ],
+       "at": [
+        "query"
+       ]
+      }
+     ],
+     "response": "GetFileResponse"
+    }
+   ]
+  }
+ ],
+ "forwards": {}
+}

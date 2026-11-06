@@ -148,3 +148,50 @@ test("--help lists `[--to MESSAGE_ID]` on talk reply: tools read it to know --to
   const r = spawnSync(process.execPath, [path.join(__dirname, "..", "bin", "spacesheep.js"), "--help"], { encoding: "utf8", env: { ...process.env, SPACESHEEP_KEY: "" } });
   assert.match(r.stdout + r.stderr, /talk reply <text> \[--session ID\] \[--to MESSAGE_ID\]/);
 });
+
+// ---------------------------------------------------------------- talk listen over the new call
+
+const { listener } = require("../lib/talk");
+const LISTENER = { talk_listener: { id: "l1", session: { id: SID }, monitor_command: `while :; do curl -sS '${URL_}?by=agent'; done` } };
+
+test("talk listen: the link comes from talk-listeners create where the server serves it", async () => {
+  const sent = [];
+  const door = async (command, inputs) => { sent.push([command, inputs]); return { status: 200, answer: LISTENER }; };
+  const mcp = async () => { throw new Error("today's talk_listen isn't asked"); };
+  const r = await listener(SID, mcp, door);
+  assert.deepEqual(sent, [["talk-listeners create", { session: SID }]]);
+  assert.equal(linkFrom(r.result), URL_);
+});
+
+test("talk listen: Talk off says so on the stopped line, from the new call or a forwarded old name", async () => {
+  const off = "The account owner has 'Talk to your sessions' switched off (Settings → Account).";
+  // the new call refuses with forbidden: today's {enabled: false}, the same line, exit 0
+  assert.deepEqual(await listener(SID, null, async () => ({ status: 403, error: { code: "forbidden", message: off, violations: [] } })), { stopped: off });
+  // today's talk_listen, before it forwards
+  assert.deepEqual(await listener(SID, async () => ({ enabled: false, reason: off }), async () => null), { stopped: off });
+  // talk_listen forwarded to the new call: its refusal is ErrorInfo, on the tool error as lib/mcp.js throws it
+  const forwarded = async () => { throw Object.assign(new Error(off), { code: "ETOOL", info: { code: "forbidden", message: off, violations: [] } }); };
+  assert.deepEqual(await listener(SID, forwarded, null), { stopped: off });
+});
+
+test("talk listen: today's talk_listen where the new call isn't served, in either answer's shape", async () => {
+  const calls = [];
+  const mcp = async (name, args) => { calls.push([name, args]); return { enabled: true, monitor_command: LISTENER.talk_listener.monitor_command }; };
+  assert.equal(linkFrom((await listener(SID, mcp, async () => null)).result), URL_);
+  assert.deepEqual(calls, [["talk_listen", { session_id: SID }]]);
+  // once the old name forwards, it answers the new call's {talk_listener}
+  assert.equal(linkFrom((await listener(SID, async () => LISTENER, null)).result), URL_);
+});
+
+test("talk listen: a refused key exits 3 as today; any other refusal is an error, exit 1", async () => {
+  await assert.rejects(listener(SID, null, async () => ({ status: 401, error: { code: "unauthenticated", message: "Unknown or revoked API key", violations: [] } })), (e) => e.code === "EAUTH");
+  await assert.rejects(listener(SID, null, async () => ({ status: 429, error: { code: "rate_limited", message: "Slow down. Retry in 30s.", violations: [] } })), (e) => e.code !== "EAUTH" && /Retry in 30s/.test(e.message));
+  const other = async () => { throw Object.assign(new Error("session: not yours"), { code: "ETOOL", info: { code: "invalid", message: "session: not yours" } }); };
+  await assert.rejects(listener(SID, other, null), /not yours/);
+});
+
+test("talk listen: run() prints today's stopped line, unchanged, when Talk is off on the new call", async () => {
+  let printed = null;
+  await run({ _: ["listen"], session: SID }, null, (v) => { printed = v; }, () => {}, async () => ({ status: 403, error: { code: "forbidden", message: "Talking to sessions is part of Pro and Team.", violations: [] } }));
+  assert.deepEqual(printed, { spacesheep_talk: false, stopped: "Talking to sessions is part of Pro and Team." });
+});

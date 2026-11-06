@@ -32,6 +32,8 @@ const TOOLS = [
 async function fakeServer(t, answer) {
   const calls = [];
   const server = http.createServer(async (req, res) => {
+    // Today's server: no doors table, which a fresh config asks for once, with no key.
+    if (req.url === "/v1/doors.json") { res.writeHead(404); return res.end(); }
     let input = ""; for await (const part of req) input += part;
     const body = JSON.parse(input);
     res.setHeader("Content-Type", "application/json");

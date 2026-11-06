@@ -1,0 +1,28 @@
+name: Test
+
+# `npm test` on every pull request, and on pushes to the ssapi/* branches that build
+# the generated commands, on the two supported Node LTS lines.
+
+on:
+  pull_request:
+  push:
+    branches: ["ssapi/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: npm test

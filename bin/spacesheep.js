@@ -69,7 +69,7 @@ const HELP = `
     spacesheep whoami                      who the stored key belongs to
     spacesheep deploy [dir|file] [opts]    publish a folder (needs index.html) or one .html file
     spacesheep list                        your spaces
-    spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
+    spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder to deploy from
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep delete <space> [--yes]      delete one of your spaces and every version of it (can't be undone);
@@ -153,12 +153,17 @@ const HELP = `
     --no-team                publish personal, whatever a .spacesheep.json names
     --org <slug>             publish under an organization with its own address (not a Team: use --team)
     -m, --message <text>     version name shown in the space's history
+    --base <sha>             the version your files are built on: anything published since is merged
+                             in (default: what this folder last published or read on this machine)
+    --replace                publish over the live version on purpose, erasing changes made there
     --json                   print the server's JSON result
 
   Auth
     SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
     SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
-    SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN})
+    SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN}); its /v1/doors.json, when it
+                             serves one, adds every call as \`spacesheep <noun> <verb>\` (listed below once fetched)
+    SPACESHEEP_DOORS_FILE    read that table from a file instead (a server branch's shared/doors.json)
 
   In GitHub Actions:
     - uses: micmmakarov/spacesheep-cli@v1
@@ -191,7 +196,11 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
+/** `list` and `versions <space>`, one line a row. A version's sha and name are `id` and
+ *  `label` on the new call. */
+const spaceLine = (s) => `${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`;
+const versionLine = (v) => `${(v.sha || v.id || "").slice(0, 12).padEnd(13)} ${(v.created_at || "").slice(0, 16).padEnd(17)} ${v.version_name || v.name || v.label || ""}`;
+const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--replace", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -280,6 +289,12 @@ const commands = {
     // Every push says who can read it because of where it lives, team or personal.
     if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
     if (r.team_missed) log(`  ! ${r.team_missed}`);
+    // Built on an older version: what landed since was merged in, line by line.
+    if (r.merged) {
+      const m = r.merged, merged = m.merged || [], kept = m.kept || [];
+      log(`  ⇄ Merged with what was published since your version (${String(m.base_sha || "").slice(0, 12)} → ${String(m.server_sha || "").slice(0, 12)}): ${merged.length} file(s) merged${merged.length ? ` (${merged.slice(0, 5).join(", ")}${merged.length > 5 ? ", …" : ""})` : ""}, ${kept.length} kept as they are on the server. Read the page back before saying what it says. This folder doesn't have the server's part, so the next deploy from it merges that in again (spacesheep read ${r.uuid || "<space>"} -o <folder> brings it here).`);
+    }
+    if (r.replaced) log(`  ! Replaced the live version ${String(r.replaced).slice(0, 12)} on purpose (--replace).`);
     if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
@@ -294,33 +309,21 @@ const commands = {
     const r = await client().call("list_spaces");
     const rows = Array.isArray(r) ? r : r.spaces || [];
     if (opts.json) return out(rows);
-    for (const s of rows) out(`${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`);
+    for (const s of rows) out(spaceLine(s));
   },
   async read(opts) {
     const [space, file] = opts._;
     if (!space) throw new Error("usage: spacesheep read <space> [path] [-o dir]");
-    const r = await client().call("read_space", file ? { uuid: space, path: file } : { uuid: space });
-    const text = typeof r === "string" ? r : JSON.stringify(r, null, 2);
-    // The tool answers "--- path (N bytes) ---\n<content>" per file.
-    const parts = text.split(/^--- (.+?)(?: \(\d+ bytes\))? ---\n/m);
-    const files = [];
-    for (let i = 1; i + 1 < parts.length; i += 2) files.push({ path: parts[i], content: parts[i + 1].replace(/\n$/, "") });
-    if (opts.json) return out(files.length ? files : text);
+    const { files, text } = await require("../lib/read").read(client(), space, { file, dir: opts.json ? null : opts.out, log });
+    if (opts.json) return out(files.length ? files.map((f) => ({ path: f.path, content: f.content.toString("utf-8") })) : text);
     if (!opts.out) return process.stdout.write(text.endsWith("\n") ? text : text + "\n");
-    if (!files.length) throw new Error(text);
-    for (const f of files) {
-      const p = path.join(opts.out, f.path);
-      fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, f.content);
-      log(`  ↓ ${f.path}`);
-    }
   },
   async versions(opts) {
     if (!opts._[0]) throw new Error("usage: spacesheep versions <space>");
     const r = await client().call("list_versions", { uuid: opts._[0] });
     if (opts.json) return out(r);
     const rows = Array.isArray(r) ? r : r.versions || [];
-    for (const v of rows) out(`${(v.sha || "").slice(0, 12).padEnd(13)} ${(v.created_at || "").slice(0, 16).padEnd(17)} ${v.version_name || v.name || ""}`);
+    for (const v of rows) out(versionLine(v));
   },
   async share(opts) {
     if (!opts._[0]) throw new Error("usage: spacesheep share <space> [--visibility v] [--email a@b.c ...]");
@@ -379,7 +382,7 @@ const commands = {
     out(await client().call("submit_feedback", args));
   },
   async talk(opts) {
-    return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log);
+    return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log, newCall);
   },
   async machine(opts) {
     const mc = require("../lib/machine");
@@ -455,7 +458,7 @@ const commands = {
   },
   async sessions(opts) {
     const subcommand = opts._[0];
-    if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out);
+    if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out, undefined, newCall);
     if (subcommand === "list" || subcommand === "get") {
       const args = require("../lib/inspection").sessionArgs(opts);
       return out(await client().call(subcommand === "list" ? "list_sessions" : "get_session", args));
@@ -472,14 +475,107 @@ const commands = {
   },
 };
 
+// Today's commands the doors table names too. They run here until the table says its
+// command replaces them (a `replaces` entry with their own name): then the door runs the
+// table's, with today's flags mapped by that entry (`--offset` → after).
+const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
+// Today's commands that stay here even where the table replaces them: each is more than
+// one request, or does work at this end. `talk listen` keeps polling the link
+// `talk-listeners create` answers, and Pointman reads every line it prints; `sessions
+// export -o DIR` writes the zip the new call links to into a folder (both on the new call,
+// newCall below). `deploy` reads the folder, uploads and pins it; `read -o` writes files;
+// `share` with --visibility and --email is two calls; `delete` asks at a terminal and
+// unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
+// prints today's one line a row (OLD_LINES).
+const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
+// Held too, on the new call: `talk on|off` write this machine's opt-in, and `talk` and `talk
+// status` say whether it's set. Apart from HELD, whose one-word names skip the table outright:
+// `talk reply` still runs on the door.
+const TALK_HERE = new Set(["talk", "talk status", "talk on", "talk off"]);
+// One line a row, as today's commands print them, for today's tools and the new calls alike.
+const OLD_LINES = new Map([
+  ["list", (a) => (a.spaces || []).map(spaceLine)],
+  ["versions", (a) => (a.versions || []).map(versionLine)],
+]);
+
+// The table door() fetched in this run (null: the server has none), or undefined when
+// door() didn't ask. newCall uses it as it came, not the cache file: a config dir that
+// can't be written never holds it, and a cached copy can be older than the server's.
+let fetched;
+
+/** A call of the table's by its command (`talk-listeners create`), for the HELD commands:
+ *  null when this server's table doesn't have it yet, and then today's MCP tool runs
+ *  instead. The table is the one door() just fetched; where door() didn't ask (a cached
+ *  table that doesn't name the word), it's fetched here, once. */
+async function newCall(command, inputs) {
+  const doors = require("../lib/doors");
+  if (fetched === undefined) fetched = await doors.loadTable({ origin: cfg.origin(), configDir: cfg.configDir() }).catch(() => null);
+  const table = fetched;
+  if (!table) return null;
+  return doors.call(table, command, inputs, {
+    origin: cfg.origin(), version: pkg.version,
+    key: () => { const k = cfg.resolveKey(); if (!k) throw Object.assign(new Error("not signed in — run `spacesheep login` (or set SPACESHEEP_KEY)"), { code: "EAUTH" }); return k.key; },
+  });
+}
+
+/** `spacesheep <noun> <verb>` from the server's doors table (lib/doors.js). Resolves
+ *  the exit code, or null for a command line the table doesn't take: then today's
+ *  commands run, as they do against a server with no /v1/doors.json. A word that is
+ *  one of today's commands costs no request once a table is cached that doesn't name
+ *  it. With no table cached (a fresh config, or a 404 older than MISSING_TTL), it asks
+ *  once, for at most PROBE_TIMEOUT: else `versions list --space x` on a fresh install
+ *  would run today's `versions <space>` for a space called "list". */
+async function door(argv) {
+  const word = argv[0];
+  if (!word || word.startsWith("-")) return null;
+  if (commands[word] && HELD.has(word)) return null;   // held whatever the table says: no request for it
+  const doors = require("../lib/doors");
+  const where = { origin: cfg.origin(), configDir: cfg.configDir() };
+  let table;
+  try {
+    let probe = false;
+    if (commands[word]) {
+      const known = await doors.loadTable({ ...where, offline: true });
+      if (known && !doors.namesWord(known, word)) return null;
+      probe = !known;
+    }
+    table = fetched = await doors.loadTable(probe ? { ...where, timeout: doors.PROBE_TIMEOUT } : where);
+  } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
+  if (!table) return null;
+  const found = doors.match(table, argv);
+  if (!found) {
+    if (commands[word]) return null;
+    const verbs = doors.nounHelp(table, word);
+    if (!verbs) return null;
+    process.stdout.write(verbs);
+    return argv.includes("--help") || argv.includes("-h") ? 0 : 2;
+  }
+  const first = Array.isArray(found) ? found[0] : found;
+  const said = argv.slice(0, first.used).join(" ");
+  if (commands[word] && TALK_HERE.has(said)) return null;
+  if (commands[word] && (HELD.has(said) || (SAME.has(said) && !first.via))) return null;
+  return doors.run(found, argv.slice(first.used), {
+    out: (s) => console.log(s), err: (s) => console.error(s),
+    origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,
+    readStdin: () => require("../lib/tools").readAll(),
+    lines: OLD_LINES.get(said),
+  });
+}
+
 (async () => {
+  const code = await door(process.argv.slice(2));
+  if (code !== null) { process.exitCode = code; return; }
   let opts;
   try { opts = parse(process.argv.slice(2)); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(2); }
   const cmd = opts._.shift();
   if (opts.version) return out(pkg.version);
   if (!cmd || opts.help || !commands[cmd]) {
     process.stdout.write(HELP);
-    process.exit(cmd && !commands[cmd] ? 1 : 0);
+    // The table's commands, as last fetched: --help never waits on the network.
+    const known = await require("../lib/doors").loadTable({ origin: cfg.origin(), configDir: cfg.configDir(), offline: true }).catch(() => null);
+    if (known) process.stdout.write(require("../lib/doors").tableHelp(known, cfg.origin()) + "\n");
+    process.exitCode = cmd && !commands[cmd] ? 1 : 0;
+    return;
   }
   try {
     await commands[cmd](opts);
