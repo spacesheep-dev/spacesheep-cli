@@ -296,8 +296,9 @@ const hang = (init) => new Promise((_, reject) => {
 
 test("the table: with none cached, `trouble` hears why there is none (a 404 isn't trouble)", async () => {
   const dir = tmp();
-  let reply;
+  let reply, asked = 0;
   const fetchImpl = async (url, init) => {
+    asked++;
     if (reply === "hang") return hang(init);
     if (reply === "refused") throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
     return { status: reply, ok: reply < 300, headers: { get: () => null }, text: async () => "<html>login</html>" };
@@ -310,9 +311,15 @@ test("the table: with none cached, `trouble` hears why there is none (a 404 isn'
   reply = 200; assert.equal(await doors.loadTable(at()), null);
   assert.deepEqual(heard.map((t) => t.why), ["no answer in 0.05 s", "couldn't connect (ECONNREFUSED)", "HTTP 503", "an answer that isn't JSON"]);
   assert.equal(heard[0].url, `${ORIGIN}/v1/doors.json`);
-  reply = 404; assert.equal(await doors.loadTable(at()), null);
-  reply = 401; assert.equal(await doors.loadTable(at()), null);
-  assert.equal(heard.length, 4, "a 404 or 401 is a server without the table, not trouble");
+  assert.equal(asked, 4);
+  // A server without the table, each on a fresh config (a 404 is cached, and would answer the next).
+  for (const status of [404, 401, 403]) {
+    reply = status;
+    const before = asked;
+    assert.equal(await doors.loadTable(at({ configDir: tmp() })), null, `HTTP ${status}`);
+    assert.equal(asked, before + 1, `HTTP ${status}: asked the server`);
+  }
+  assert.equal(heard.length, 4, "a 404, 401 or 403 is a server without the table, not trouble");
 });
 
 test("the table: used as it is for the server's max-age; a revalidation waits only briefly", async () => {
