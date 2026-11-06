@@ -430,7 +430,7 @@ open http://localhost:4280/
 | `spacesheep mcp status \| uninstall` | Which harnesses go through it; take it out of them |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
-| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--team`, `--team-access`, `--no-team`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). Every deploy prints where the space lives (a team, or personal). |
+| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--team`, `--team-access`, `--no-team`, `--org`, `--base <sha>`, `--replace`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). Every deploy prints where the space lives (a team, or personal). Each update names the version its files are built on (`base_sha`: what this folder last published from this machine, or `--base`), so anything published since is merged in rather than overwritten; a clash is refused with the live version's sha, and `--replace` publishes over it on purpose. |
 | `spacesheep list` | Your spaces |
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |

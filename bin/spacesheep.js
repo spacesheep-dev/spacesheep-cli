@@ -153,6 +153,9 @@ const HELP = `
     --no-team                publish personal, whatever a .spacesheep.json names
     --org <slug>             publish under an organization with its own address (not a Team: use --team)
     -m, --message <text>     version name shown in the space's history
+    --base <sha>             the version your files are built on: anything published since is merged
+                             in (default: what this folder last published from this machine)
+    --replace                publish over the live version on purpose (its newest version as --base)
     --json                   print the server's JSON result
 
   Auth
@@ -197,7 +200,7 @@ function parse(argv) {
  *  `label` on the new call. */
 const spaceLine = (s) => `${(s.emoji || "·").padEnd(2)} ${(s.title || "(untitled)").slice(0, 40).padEnd(42)} ${(s.visibility || "").padEnd(10)} ${s.url || s.id}`;
 const versionLine = (v) => `${(v.sha || v.id || "").slice(0, 12).padEnd(13)} ${(v.created_at || "").slice(0, 16).padEnd(17)} ${v.version_name || v.name || v.label || ""}`;
-const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
+const FLAGS = new Set(["--camera", "--screen", "--test", "--beta", "--system", "--load-test", "--service", "--remove-service", "--new", "--replace", "--no-manifest", "--no-team", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service", "--dry-run", "--no-skill", "--no-login"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -286,6 +289,12 @@ const commands = {
     // Every push says who can read it because of where it lives, team or personal.
     if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
     if (r.team_missed) log(`  ! ${r.team_missed}`);
+    // Built on an older version: what landed since was merged in, line by line.
+    if (r.merged) {
+      const m = r.merged, merged = m.merged || [], kept = m.kept || [];
+      log(`  ⇄ Merged with what was published since your version (${String(m.base_sha || "").slice(0, 12)} → ${String(m.server_sha || "").slice(0, 12)}): ${merged.length} file(s) merged${merged.length ? ` (${merged.slice(0, 5).join(", ")}${merged.length > 5 ? ", …" : ""})` : ""}, ${kept.length} kept as they are on the server. Read the page back before saying what it says.`);
+    }
+    if (r.replaced) log(`  ! Replaced the live version ${String(r.replaced).slice(0, 12)} on purpose (--replace).`);
     if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
