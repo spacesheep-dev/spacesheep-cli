@@ -241,7 +241,7 @@ test("read -o of a page with an image on a server without get_file: nothing writ
   assert.equal(savedBase(at(dir)), "old000", "the folder's base is as it was");
   // A size that matches but bytes a decoder replaced are no more exact.
   const same = fakeSpace({ "index.html": "<p>A</p>\n", "a.bin": Buffer.from([0xf0, 0x90, 0x80, 0x41]).toString("latin1") });
-  await assert.rejects(read(reader(same, false), "sp-1", { dir: fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-bin-")) }), /^a\.bin can't be read byte for byte/);
+  await assert.rejects(read(reader(same, false), "sp-1", { dir: fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-bin-")) }), (e) => /^a\.bin can't be read byte for byte/.test(e.message));
 });
 
 test("read -o as a viewer reads the live page with no base: viewers can't list versions", async () => {
