@@ -572,6 +572,7 @@ async function door(argv) {
     origin: where.origin, key: () => (cfg.resolveKey() || {}).key, version: pkg.version,
     readStdin: () => require("../lib/tools").readAll(),
     lines: OLD_LINES.get(said),
+    meanings: table.error_meanings,
   });
 }
 
