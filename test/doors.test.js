@@ -437,14 +437,14 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
 
     const bad = await cli(["spaces", "update", "@james/plan", "--title", "x"], env);
     assert.equal(bad.code, 1);
-    assert.match(bad.err, /Check the title\.\n\s+title: at most 200 characters/);
+    assert.match(bad.err, /Check the title\. \(invalid\)\n\s+title: at most 200 characters/);
     const badJson = await cli(["spaces", "update", "@james/plan", "--title", "x", "--json"], env);
     assert.equal(badJson.code, 1);
     assert.equal(JSON.parse(badJson.out).code, "invalid");
     // A message that is one of its violations isn't printed twice; the others still are.
     const one = await cli(["spaces", "get", "@james/plan"], env);
     assert.equal(one.code, 1);
-    assert.equal(one.err, "\n  ✗ size: takes a whole number\n    path: is required\n\n");
+    assert.equal(one.err, "\n  ✗ size: takes a whole number (invalid)\n    path: is required\n\n");
 
     const before = seen.length;
     const wrong = await cli(["spaces", "get", "--nope"], env);
@@ -477,6 +477,60 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     assert.match(verbs.out, /spacesheep spaces get <space>/);
     const top = await cli(["--help"], env);
     assert.match(top.out, /From the server .*\n(.*\n)*\s+spacesheep spaces\s+get, update, list, create, share, delete, screenshot/);
+  } finally { s.close(); }
+});
+
+test("a command's help lists the refusals its call can give, with what each means where the table says", () => {
+  const found = doors.match(TABLE, ["spaces", "get"]);
+  const first = Array.isArray(found) ? found[0] : found;
+  assert.doesNotMatch(doors.helpFor(first), /can refuse/, "a call with no errors has no section");
+  assert.equal(doors.helpFor({ ...first, method: { ...first.method, errors: [] } }), doors.helpFor(first));
+  // Only ErrorInfo words: anything else in the list is left out.
+  const method = { ...first.method, errors: ["forbidden", "not_found", "http_500", 3] };
+  const bare = doors.helpFor({ ...first, method });
+  assert.match(bare, /--json .*\n\n  can refuse\n    forbidden\n    not_found\n\n$/);
+  const meant = doors.helpFor({ ...first, method }, { not_found: "The space or file isn't there.", invalid: "unused" });
+  assert.match(meant, /\n  can refuse\n    forbidden\n    not_found {18}The space or file isn't there\.\n\n$/);
+  assert.doesNotMatch(meant, /unused/, "only the call's own words");
+});
+
+test("the top-level help names the refusals any command can give, once", () => {
+  assert.doesNotMatch(doors.tableHelp(TABLE, ORIGIN), /refuse/, "a table with no common_errors has no section");
+  const t = { ...TABLE, common_errors: ["internal", "unauthenticated"], error_meanings: { unauthenticated: "No key, or a revoked one." } };
+  assert.match(doors.tableHelp(t, ORIGIN), /\n  Any of them can also refuse:\n    internal\n    unauthenticated {12}No key, or a revoked one\.\n$/);
+});
+
+test("a refusal's line ends with its ErrorInfo word; a body without one gets no made-up word", () => {
+  const info = doors.errorInfo(404, '{"code":"not_found","message":"Space not found.","violations":[]}');
+  assert.equal(doors.refusalWords(info, { word: true }), "Space not found. (not_found)");
+  assert.equal(doors.refusalWords(info), "Space not found.", "today's tools' readers (lib/mcp.js) are unchanged");
+  assert.equal(doors.refusalWords(doors.errorInfo(502, "Bad gateway"), { word: true }), "the server answered 502: Bad gateway");
+  const bad = doors.errorInfo(400, '{"error":{"code":"invalid","message":"Check the title.","violations":[{"field":"title","message":"at most 200 characters"}]}}');
+  assert.equal(doors.refusalWords(bad, { word: true }), "Check the title. (invalid)\n    title: at most 200 characters");
+});
+
+test("end to end: the table's errors and meanings reach a command's --help, the top-level --help and a refusal", async () => {
+  const table = JSON.parse(JSON.stringify(TABLE));
+  const get = table.services.flatMap((svc) => svc.methods).find((m) => m.cli.command === "spacesheep spaces get");
+  get.errors = ["forbidden", "not_found"];
+  table.common_errors = ["unauthenticated"];
+  table.error_meanings = { not_found: "The space or file isn't there.", unauthenticated: "No key, or a revoked one." };
+  const { s, origin } = await server((req) => {
+    if (req.url === "/v1/doors.json") return [200, JSON.stringify(table)];
+    if (req.method === "GET" && req.url.startsWith("/v1/spaces/")) return [404, '{"code":"not_found","message":"Space not found.","violations":[]}'];
+  });
+  const env = { SPACESHEEP_ORIGIN: origin, SPACESHEEP_CONFIG_DIR: tmp(), SPACESHEEP_KEY: "ss_e2e" };
+  try {
+    const help = await cli(["spaces", "get", "--help"], env);
+    assert.equal(help.code, 0, help.err);
+    assert.match(help.out, /\n  can refuse\n    forbidden\n    not_found {18}The space or file isn't there\.\n/);
+    const top = await cli(["--help"], env);
+    assert.match(top.out, /\n  Any of them can also refuse:\n    unauthenticated {12}No key, or a revoked one\.\n/);
+    const refused = await cli(["spaces", "get", "@james/gone"], env);
+    assert.equal(refused.code, 1);
+    assert.equal(refused.err, "\n  ✗ Space not found. (not_found)\n\n");
+    const raw = await cli(["spaces", "get", "@james/gone", "--json"], env);
+    assert.equal(JSON.parse(raw.out).code, "not_found", "--json is the ErrorInfo as it came");
   } finally { s.close(); }
 });
 
