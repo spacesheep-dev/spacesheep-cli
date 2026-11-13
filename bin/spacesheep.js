@@ -74,6 +74,9 @@ const HELP = `
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep delete <space> [--yes]      delete one of your spaces and every version of it (can't be undone);
                                            takes a uuid, a link or one of your slugs, and unpins this folder
+    spacesheep skills check [folder]       check a skill folder, or a repo holding one, for the format
+                                           Spacesheep reads; no sign-in, and the folder never leaves
+                                           this machine. --json for CI
     spacesheep tools [name]                every tool the server has, or one tool's arguments
     spacesheep call <tool> [key=value | key:=json ...]
                                            run any of them: \`call screenshot uuid=<space> width:=390\`;
@@ -456,6 +459,11 @@ const commands = {
     if (sub === "status") return mem.status(opts, out);
     throw new Error("usage: spacesheep memory install [--claude] [--codex] [--codex-chain] | uninstall | status");
   },
+  async skills(opts) {
+    const [sub, folder] = opts._;
+    if (sub === "check") { process.exitCode = require("../lib/skill-check").run(folder, { json: opts.json }); return; }
+    throw new Error("usage: spacesheep skills check [folder]");
+  },
   async sessions(opts) {
     const subcommand = opts._[0];
     if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out, undefined, newCall);
@@ -487,6 +495,9 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // `share` with --visibility and --email is two calls; `delete` asks at a terminal and
 // unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
 // prints today's one line a row (OLD_LINES).
+// Today's commands that never ask the table: `skills check` reads a folder on this machine,
+// in CI as much as at a desk, and never waits on the server.
+const LOCAL = new Set(["skills check"]);
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
 // Held too, on the new call: `talk on|off` write this machine's opt-in, and `talk` and `talk
 // status` say whether it's set. Apart from HELD, whose one-word names skip the table outright:
@@ -530,6 +541,7 @@ async function newCall(command, inputs) {
 async function door(argv) {
   const word = argv[0];
   if (!word || word.startsWith("-") || word === "help") return null;
+  if (LOCAL.has(argv.slice(0, 2).join(" "))) return null;   // runs here: no table, no request
   if (commands[word] && HELD.has(word)) return null;   // held whatever the table says: no request for it
   const doors = require("../lib/doors");
   const where = { origin: cfg.origin(), configDir: cfg.configDir() };

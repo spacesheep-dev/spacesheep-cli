@@ -418,6 +418,26 @@ open http://localhost:4280/
   socket that doesn't come from one of its own pages.
 - `--port 4280` sets where it listens. `mirror status` says where it runs; `mirror off` stops it.
 
+## Check a skill before you tag it
+
+`spacesheep skills check` reads a skill folder, or a repo that holds one, the way Spacesheep reads
+the format when it takes a release: SKILL.md as the [Agent Skills spec](https://agentskills.io/specification)
+defines it, `spacesheep.yaml`'s shape, the files' paths, types and sizes, and the version's hash. It needs
+no sign-in, and the folder never leaves your machine.
+
+```bash
+npx -y spacesheep@latest skills check            # a repo: finds its one top-level skill folder
+npx -y spacesheep@latest skills check my-skill   # or the folder itself
+npx -y spacesheep@latest skills check --json     # for CI: exits 1 when the folder can't become a version
+```
+
+- **A repo holds one skill**, in a top-level folder named for it (`my-skill/SKILL.md`). The repo's own
+  files (README, LICENSE, `.github/`) never enter a version.
+- **In a git repo** it checks what a commit would hold, so files git ignores are left out.
+- **Well-formed isn't accepted.** What `spacesheep.yaml` declares the skill may ask for (scopes, triggers,
+  tools, outside hosts), and a review of what the skill holds, are checked by Spacesheep when it takes
+  the release.
+
 ## Commands
 
 | Command | What it does |
@@ -436,6 +456,7 @@ open http://localhost:4280/
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
 | `spacesheep delete <space> [--yes]` | Delete one of your spaces and every version of it. It can't be undone, so a terminal asks first (`--yes` skips the question; an agent's shell isn't a terminal and isn't asked). A folder whose `.spacesheep.json` pointed at it is unpinned, so its next deploy makes a new space |
+| `spacesheep skills check [folder]` | Check a skill folder, or a repo holding one, for the format Spacesheep reads; `--json` for CI |
 | `spacesheep tools [name]` | Every tool the server offers your key (what it does: reads, changes or destructive), or one tool's arguments |
 | `spacesheep call <tool> [key=value \| key:=json ...]` | Run any tool: `key=value` passes a string, `key:=json` a number, boolean, list or object; or pass one JSON object, or `-` to read it from stdin. Text is printed (JSON pretty-printed); pictures are written to files (`-o dir`, else a temp folder) and their paths printed — `spacesheep call screenshot uuid=<space> width:=390` is the phone check. `--json` prints the whole result |
 | `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir`, `--codex-chain` |
