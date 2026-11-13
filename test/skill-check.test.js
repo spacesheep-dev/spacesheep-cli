@@ -150,6 +150,9 @@ test("`spacesheep skills check` asks the server nothing, and exits 0 or 1", asyn
     assert.strictEqual(await exit(["skills", "check", good]), 0);
     assert.strictEqual(await exit(["skills", "check", write({ "README.md": "x\n" }), "--json"]), 1);
     assert.deepStrictEqual(asked, []);
+    // Every other `skills …` is the server's: it asks for the doors table, not this command.
+    assert.strictEqual(await exit(["skills", "add", "owner/name"]), 1);
+    assert.ok(asked.some((u) => u.startsWith("/v1/doors.json")), `asked: ${asked.join(", ")}`);
   } finally {
     server.close();
   }

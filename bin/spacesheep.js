@@ -459,11 +459,6 @@ const commands = {
     if (sub === "status") return mem.status(opts, out);
     throw new Error("usage: spacesheep memory install [--claude] [--codex] [--codex-chain] | uninstall | status");
   },
-  async skills(opts) {
-    const [sub, folder] = opts._;
-    if (sub === "check") { process.exitCode = require("../lib/skill-check").run(folder, { json: opts.json }); return; }
-    throw new Error("usage: spacesheep skills check [folder]");
-  },
   async sessions(opts) {
     const subcommand = opts._[0];
     if (subcommand === "export") return require("../lib/session-export").run(opts, (name, args) => client().call(name, args), log, out, undefined, newCall);
@@ -495,9 +490,16 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // `share` with --visibility and --email is two calls; `delete` asks at a terminal and
 // unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
 // prints today's one line a row (OLD_LINES).
-// Today's commands that never ask the table: `skills check` reads a folder on this machine,
-// in CI as much as at a desk, and never waits on the server.
-const LOCAL = new Set(["skills check"]);
+// Commands that run here before the table is asked for, whatever it says: `skills check` reads
+// a folder on this machine (in CI as much as at a desk) and never waits on the server. The
+// rest of `skills …` is the table's, so `skills` isn't one of today's commands: a word that
+// is hides the table's verbs for it behind a cached copy from before they existed.
+const LOCAL = {
+  "skills check": (opts) => {
+    if (opts.help) return out("  spacesheep skills check [folder] [--json]");
+    process.exitCode = require("../lib/skill-check").run(opts._[2], { json: opts.json });
+  },
+};
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
 // Held too, on the new call: `talk on|off` write this machine's opt-in, and `talk` and `talk
 // status` say whether it's set. Apart from HELD, whose one-word names skip the table outright:
@@ -541,7 +543,6 @@ async function newCall(command, inputs) {
 async function door(argv) {
   const word = argv[0];
   if (!word || word.startsWith("-") || word === "help") return null;
-  if (LOCAL.has(argv.slice(0, 2).join(" "))) return null;   // runs here: no table, no request
   if (commands[word] && HELD.has(word)) return null;   // held whatever the table says: no request for it
   const doors = require("../lib/doors");
   const where = { origin: cfg.origin(), configDir: cfg.configDir() };
@@ -589,6 +590,10 @@ async function door(argv) {
 }
 
 (async () => {
+  const local = LOCAL[process.argv.slice(2, 4).join(" ")];
+  if (local) {
+    try { return local(parse(process.argv.slice(2))); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(1); }
+  }
   const code = await door(process.argv.slice(2));
   if (code !== null) { process.exitCode = code; return; }
   let opts;
