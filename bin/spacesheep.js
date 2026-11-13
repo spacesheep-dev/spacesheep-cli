@@ -74,6 +74,9 @@ const HELP = `
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep delete <space> [--yes]      delete one of your spaces and every version of it (can't be undone);
                                            takes a uuid, a link or one of your slugs, and unpins this folder
+    spacesheep skills lint [folder]        check a skill folder, or a repo holding one, for the format
+                                           Spacesheep reads; no sign-in, and the folder never leaves
+                                           this machine. --json for CI
     spacesheep tools [name]                every tool the server has, or one tool's arguments
     spacesheep call <tool> [key=value | key:=json ...]
                                            run any of them: \`call screenshot uuid=<space> width:=390\`;
@@ -487,6 +490,16 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // `share` with --visibility and --email is two calls; `delete` asks at a terminal and
 // unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
 // prints today's one line a row (OLD_LINES).
+// Commands that run here before the table is asked for, whatever it says: `skills lint` reads
+// a folder on this machine (in CI as much as at a desk) and never waits on the server. The
+// rest of `skills …` is the table's, so `skills` isn't one of today's commands: a word that
+// is hides the table's verbs for it behind a cached copy from before they existed.
+const LOCAL = {
+  "skills lint": (opts) => {
+    if (opts.help) return out("  spacesheep skills lint [folder] [--json]");
+    process.exitCode = require("../lib/skill-lint").run(opts._[2], { json: opts.json });
+  },
+};
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
 // Held too, on the new call: `talk on|off` write this machine's opt-in, and `talk` and `talk
 // status` say whether it's set. Apart from HELD, whose one-word names skip the table outright:
@@ -577,6 +590,10 @@ async function door(argv) {
 }
 
 (async () => {
+  const local = LOCAL[process.argv.slice(2, 4).join(" ")];
+  if (local) {
+    try { return local(parse(process.argv.slice(2))); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(1); }
+  }
   const code = await door(process.argv.slice(2));
   if (code !== null) { process.exitCode = code; return; }
   let opts;
