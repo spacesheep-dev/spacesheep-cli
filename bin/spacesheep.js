@@ -156,8 +156,9 @@ const HELP = `
     --no-team                publish personal, whatever a .spacesheep.json names
     --org <slug>             publish under an organization with its own address (not a Team: use --team)
     -m, --message <text>     version name shown in the space's history
-    --base <sha>             the version your files are built on: anything published since is merged
-                             in (default: what this folder last published or read on this machine)
+    --base <sha>             the version your files are built on, or the start of its sha: anything
+                             published since is merged in (default: what this folder last published
+                             or read on this machine)
     --replace                publish over the live version on purpose, erasing changes made there
     --json                   print the server's JSON result
 

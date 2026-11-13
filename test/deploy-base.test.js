@@ -10,7 +10,7 @@ const path = require("path");
 const conf = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-conf-"));
 process.env.SPACESHEEP_CONFIG_DIR = conf;
 const { deploy, clashWords } = require("../lib/deploy");
-const { savedBase } = require("../lib/bases");
+const { savedBase, saveBase } = require("../lib/bases");
 const { read } = require("../lib/read");
 
 const ORIGIN = "https://mcp.example/mcp";
@@ -197,6 +197,100 @@ test("a second deploy after a merge keeps the server's own file and lines", asyn
   assert.equal(five.sent.base_sha, four.r.sha);
 });
 
+test("after read <link> -o, ten deploys in a row build on the last, whichever name the space is given", async () => {
+  const space = fakeSpace({ "index.html": "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n" });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-link-"));
+  const link = "https://spacesheep.dev/@y/q3";
+  await read(reader(space), link, { dir });
+  const names = [link, link, link, undefined, link, "@y/q3", "/@y/q3/", "sp-1", link, undefined];
+  for (const [i, name] of names.entries()) {
+    const before = space.head;
+    body(dir, [`A, edit ${i + 1}`, "B", "C"]);
+    const { sent, r } = await run(dir, name ? { space: name } : {}, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+    assert.equal(sent.base_sha, before, `deploy ${i + 1} (${name || "the pin"}) builds on the version before it`);
+    assert.equal(r.merged, undefined);
+  }
+  assert.match(space.files()["index.html"], /<p>A, edit 10<\/p>/);
+});
+
+/** `reader`, on a server whose list_versions names the space's id, as today's does. */
+const named = (space, uuid) => ({ ...reader(space), call: async (n, a) => (n === "list_versions" ? { space: { uuid, title: "Q3" }, ...space.versions() } : reader(space).call(n, a)) });
+const Q3 = "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n";
+
+test("read by link, deploy, someone saves, read again by @handle/slug: the pinned deploy builds on that read", async () => {
+  for (const again of ["@y/q3", "/@y/q3/", "https://spacesheep.dev/@y/q3/", "https://spacesheep.dev/@y/q3?v=1"]) {
+    const space = fakeSpace({ "index.html": Q3 });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-alias-"));
+    const link = "https://spacesheep.dev/@y/q3";
+    await read(reader(space), link, { dir });
+    body(dir, ["A first", "B", "C"]);
+    await run(dir, { space: link }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+    space.edit((t) => { t["index.html"] = t["index.html"].replace("A first", "A server"); });
+    const readHead = space.head;
+    await read(reader(space), again, { dir });
+    body(dir, ["A after read", "B", "C"]);
+    // A stale base (the deploy's v2) clashes on line 2 here, though the edit was made on v3.
+    const { sent, r } = await run(dir, {}, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+    assert.equal(sent.base_sha, readHead, `a deploy uses the version just read through ${again}`);
+    assert.equal(r.merged, undefined);
+    assert.match(space.files()["index.html"], /<p>A after read<\/p>/);
+  }
+});
+
+test("read by link on a server that names the id: a deploy by the id builds on that read", async () => {
+  const space = fakeSpace({ "index.html": Q3 });
+  space.edit((t) => { t["index.html"] = t["index.html"].replace("<p>B</p>", "<p>B, before</p>"); });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-id-"));
+  await read(named(space, "sp-1"), "https://spacesheep.dev/@y/q3", { dir });
+  body(dir, ["A, mine", "B, before", "C"]);
+  const { sent, r } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v2");
+  assert.equal(r.merged, undefined);
+});
+
+test("a newer read of another space into the folder is not this space's base", async () => {
+  const space = fakeSpace({ "index.html": Q3 });
+  const other = fakeSpace({ "index.html": Q3.replace("Q3", "Other") });
+  other.edit((t) => { t["index.html"] += "\n"; });
+  other.edit((t) => { t["index.html"] += "\n"; });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-two-"));
+  await read(reader(space), "https://spacesheep.dev/@y/q3", { dir });
+  body(dir, ["A first", "B", "C"]);
+  await run(dir, { space: "https://spacesheep.dev/@y/q3" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  await read(named(other, "sp-2"), "@z/other", { dir });
+  body(dir, ["A again", "B", "C"]);
+  const { sent } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v2", "sp-1's own last version, not sp-2's v3 read later");
+  assert.equal(savedBase({ origin: ORIGIN, space: "@z/other", dir }), "v3");
+  assert.equal(savedBase({ origin: ORIGIN, space: "sp-2", dir }), "v3");
+});
+
+test("two saves in one millisecond, or after the clock steps back: the later one is the base", () => {
+  const dir = page({ space: "sp-1" });
+  const names = { origin: ORIGIN, space: ["sp-1", "https://spacesheep.dev/@y/q3"], dir };
+  const real = Date.prototype.toISOString;
+  try {
+    Date.prototype.toISOString = () => "2026-11-13T20:00:00.000Z";
+    saveBase(names, "dep222");
+    saveBase({ origin: ORIGIN, space: "@y/q3", dir }, "read333");
+    assert.equal(savedBase(names), "read333", "a read in the deploy's millisecond");
+    Date.prototype.toISOString = () => "2026-11-13T19:00:00.000Z";
+    saveBase({ origin: ORIGIN, space: "sp-1", dir }, "dep444");
+    assert.equal(savedBase(names), "dep444", "a deploy after the clock stepped back an hour");
+  } finally { Date.prototype.toISOString = real; }
+});
+
+test("a base an older CLI kept under the link as typed is still found", async () => {
+  const dir = page({ space: "sp-1", url: "https://spacesheep.dev/@y/q3/" });
+  const store = path.join(conf, "bases.json");
+  const all = fs.existsSync(store) ? JSON.parse(fs.readFileSync(store, "utf-8")) : {};
+  all[`${ORIGIN} https://spacesheep.dev/@y/q3/ ${path.resolve(dir)}`] = { sha: "old111", at: "2026-11-01T00:00:00.000Z" };
+  fs.writeFileSync(store, JSON.stringify(all));
+  const { sent } = await run(dir, {}, { deploy: published("new222") });
+  assert.equal(sent.base_sha, "old111");
+  assert.equal(savedBase({ origin: ORIGIN, space: "@y/q3", dir }), "new222");
+});
+
 test("a second writer reads the page, changes it and deploys with no sha: merged with what landed", async () => {
   const space = fakeSpace({ "index.html": "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n" });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-read-"));
@@ -310,6 +404,20 @@ test("--base sends that sha, over the saved one", async () => {
   assert.equal(sent.base_sha, "live123");
 });
 
+test("a short --base is the one version whose id starts with it, or nothing is deployed", async () => {
+  const versions = { versions: [{ id: "4b2d9e01c3aa" }, { id: "4b2d00000000" }, { sha: "c0803990ca36" }] };
+  const dir = page({ space: "sp-1" });
+  for (const [given, full] of [["4b2d9e0", "4b2d9e01c3aa"], ["C0803", "c0803990ca36"]]) {
+    const { sent, calls } = await run(dir, { base: given }, { list_versions: versions, deploy: published("kkk000") });
+    assert.equal(sent.base_sha, full);
+    assert.deepEqual(calls[0], ["list_versions", { uuid: "sp-1" }]);
+  }
+  const whole = await run(dir, { base: "4b2d00000000" }, { list_versions: () => assert.fail("a whole id needs no listing"), deploy: published("lll000") });
+  assert.equal(whole.sent.base_sha, "4b2d00000000");
+  await assert.rejects(run(dir, { base: "4b2d" }, { list_versions: versions }), (e) => /is the start of 2 versions \(4b2d9e01c3aa, 4b2d00000000\): give more of it\. Nothing was deployed\.$/.test(e.message) && e.calls.length === 1);
+  await assert.rejects(run(dir, { base: "abcdef" }, { list_versions: versions }), (e) => /is the start of none of this space's newest versions/.test(e.message) && e.calls.length === 1);
+});
+
 test("a clash says the live sha, the parts, and how to go on, and saves nothing", async () => {
   const dir = page({ space: "sp-1" });
   await run(dir, {}, { deploy: published("kkk111") });
@@ -334,10 +442,12 @@ test("a clash says the live sha, the parts, and how to go on, and saves nothing"
   assert.equal(savedBase({ origin: ORIGIN, space: "sp-1", dir }), "kkk111");
 });
 
-test("no_base, today's JSON and a door's ErrorInfo alike, says how to go on", async () => {
-  const today = clashWords({ error: "conflict", reason: "no_base", message: "published by ana@x.com, not by you", server_sha: "srv333" }, "spacesheep deploy .", "sp-1");
-  assert.match(today, /live version: srv333\n/);
-  assert.match(today, /--replace/);
+test("no_base, today's JSON and a door's ErrorInfo alike, gives the way that keeps both in its first line", async () => {
+  const today = clashWords({ error: "conflict", reason: "no_base", message: "published by ana@x.com, not by you", server_sha: "srv333" }, "spacesheep deploy .", "sp-1", null, "deploy refused — conflict: published by ana@x.com, not by you");
+  const [first, second, ...rest] = today.split("\n  ");
+  assert.equal(first, "this folder has no version of sp-1 to build on, and its live version was published from elsewhere, so nothing was deployed. To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1");
+  assert.equal(second, "To publish yours over the live version, erasing the changes made there: spacesheep deploy . --replace");
+  assert.deepEqual(rest, ["deploy refused — conflict: published by ana@x.com, not by you", "live version: srv333"]);
   const dir = page({ space: "sp-1" });
   // A door's shapes (ssapi/picks-base): code `conflict`, a violation on `parent`.
   for (const why of ["no_base", "conflict"]) {
@@ -345,9 +455,16 @@ test("no_base, today's JSON and a door's ErrorInfo alike, says how to go on", as
       code: "ETOOL", info: { code: "conflict", message: "…", violations: [{ field: "parent", message: why }] },
     });
     await assert.rejects(run(dir, {}, { deploy: () => { throw door; } }), (e) => {
-      assert.match(e.message, /^A save needs its parent/);
-      assert.match(e.message, /erasing the changes made there: spacesheep deploy .* --replace/);
-      assert.match(e.message, /then spacesheep deploy <folder> --space sp-1/);
+      const lines = e.message.split("\n  ");
+      if (why === "no_base") {
+        assert.match(lines[0], /^this folder has no version of sp-1 to build on, .* To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1$/);
+        assert.match(lines[1], /^To publish yours over the live version, erasing the changes made there: spacesheep deploy .* --replace$/);
+        assert.match(lines[2], /^A save needs its parent/);
+      } else {
+        assert.match(e.message, /^A save needs its parent/);
+        assert.match(e.message, /erasing the changes made there: spacesheep deploy .* --replace/);
+        assert.match(e.message, /then spacesheep deploy <folder> --space sp-1/);
+      }
       return true;
     });
   }
