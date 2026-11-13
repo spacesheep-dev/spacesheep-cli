@@ -327,16 +327,16 @@ test("--base sends that sha, over the saved one", async () => {
 });
 
 test("a short --base is the one version whose id starts with it, or nothing is deployed", async () => {
-  const versions = { versions: [{ id: "4b2d9e01c3aa" }, { id: "4b2f00000000" }, { sha: "c0803990ca36" }] };
+  const versions = { versions: [{ id: "4b2d9e01c3aa" }, { id: "4b2d00000000" }, { sha: "c0803990ca36" }] };
   const dir = page({ space: "sp-1" });
   for (const [given, full] of [["4b2d9e0", "4b2d9e01c3aa"], ["C0803", "c0803990ca36"]]) {
     const { sent, calls } = await run(dir, { base: given }, { list_versions: versions, deploy: published("kkk000") });
     assert.equal(sent.base_sha, full);
     assert.deepEqual(calls[0], ["list_versions", { uuid: "sp-1" }]);
   }
-  const whole = await run(dir, { base: "4b2f00000000" }, { list_versions: () => assert.fail("a whole id needs no listing"), deploy: published("lll000") });
-  assert.equal(whole.sent.base_sha, "4b2f00000000");
-  await assert.rejects(run(dir, { base: "4b2" }, { list_versions: versions }), (e) => /is the start of 2 versions \(4b2d9e01c3aa, 4b2f00000000\): give more of it\. Nothing was deployed\.$/.test(e.message) && e.calls.length === 1);
+  const whole = await run(dir, { base: "4b2d00000000" }, { list_versions: () => assert.fail("a whole id needs no listing"), deploy: published("lll000") });
+  assert.equal(whole.sent.base_sha, "4b2d00000000");
+  await assert.rejects(run(dir, { base: "4b2d" }, { list_versions: versions }), (e) => /is the start of 2 versions \(4b2d9e01c3aa, 4b2d00000000\): give more of it\. Nothing was deployed\.$/.test(e.message) && e.calls.length === 1);
   await assert.rejects(run(dir, { base: "abcdef" }, { list_versions: versions }), (e) => /is the start of none of this space's newest versions/.test(e.message) && e.calls.length === 1);
 });
 
