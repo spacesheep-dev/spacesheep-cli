@@ -1,5 +1,5 @@
 "use strict";
-// `spacesheep skills check`: the published half of Spacesheep's skill checker
+// `spacesheep skills lint`: the published half of Spacesheep's skill checker
 // (lib/skill-check.gen.js), a folder or a repo read from disk, and the import's words for
 // the three ways a repo can't hold a skill.
 const test = require("node:test");
@@ -10,7 +10,7 @@ const os = require("os");
 const path = require("path");
 const http = require("http");
 const { execFileSync, spawn } = require("child_process");
-const { check, run, SAID } = require("../lib/skill-check");
+const { lint, run, SAID } = require("../lib/skill-lint");
 
 const GEN = path.join(__dirname, "..", "lib", "skill-check.gen.js");
 const BIN = path.join(__dirname, "..", "bin", "spacesheep.js");
@@ -72,7 +72,7 @@ test("the published file is the one the app's repo builds (where a checkout of i
 
 test("a well-formed folder passes, with the hash worked out the same way here", () => {
   const root = write(skill());
-  const c = check(path.join(root, "my-skill"));
+  const c = lint(path.join(root, "my-skill"));
   assert.strictEqual(c.ok, true, c.problems.join("; "));
   assert.strictEqual(c.name, "my-skill");
   assert.strictEqual(c.files, 2);
@@ -86,36 +86,36 @@ test("a repo: the one top-level skill folder is checked, and the repo's own file
     "README.md": "# My skill\n", "CHANGELOG.md": "## v1.0.0\n", "LICENSE": "MIT\n",
     ".github/workflows/check.yml": "on: pull_request\n", "notes/todo.txt": "later\n",
   });
-  const c = check(root);
+  const c = lint(root);
   assert.strictEqual(c.ok, true, c.problems.join("; "));
   assert.strictEqual(c.folder, path.relative(process.cwd(), path.join(root, "my-skill")));
-  assert.strictEqual(c.hash, check(path.join(root, "my-skill")).hash);
+  assert.strictEqual(c.hash, lint(path.join(root, "my-skill")).hash);
 });
 
 test("the three refusals are the import's words, and refuse", () => {
-  const none = check(write({ "README.md": "# Nothing\n", "docs/a.md": "a\n" }));
+  const none = lint(write({ "README.md": "# Nothing\n", "docs/a.md": "a\n" }));
   assert.deepStrictEqual([none.ok, none.problems], [false, [SAID.none]]);
   assert.strictEqual(SAID.none, "No skill here: the repo needs one top-level folder with a SKILL.md.");
 
-  const several = check(write({ ...skill("bravo"), ...skill("alpha") }));
+  const several = lint(write({ ...skill("bravo"), ...skill("alpha") }));
   assert.deepStrictEqual(several.problems, ["More than one skill here (alpha, bravo): a repo holds one skill."]);
 
   const root = write({ "my-skill/SKILL.md": SKILL_MD("other-name") });
-  assert.deepStrictEqual(check(root).problems, ['The folder "my-skill" and the skill\'s name "other-name" differ: they must match.']);
+  assert.deepStrictEqual(lint(root).problems, ['The folder "my-skill" and the skill\'s name "other-name" differ: they must match.']);
   let said = "";
   assert.strictEqual(run(root, {}, (s) => { said += s; }), 1);
   assert.match(said, /can't become a version: 1 problem\n {4}- The folder "my-skill"/);
 });
 
 test("the checker's own problems come through as it says them", () => {
-  const c = check(write({ ...skill(), "my-skill/tool.exe": "MZ" }));
+  const c = lint(write({ ...skill(), "my-skill/tool.exe": "MZ" }));
   assert.strictEqual(c.ok, false);
   assert.deepStrictEqual(c.problems, ["bad_path: tool.exe: this kind of file isn't accepted in a skill"]);
 });
 
 test("what spacesheep.yaml declares it may ask for is taken, and left to Spacesheep", () => {
   const root = write({ ...skill(), "my-skill/spacesheep.yaml": "title: Hello\nscopes:\n  any.scope: why\nsends_to:\n  - example.com\n" });
-  const c = check(root);
+  const c = lint(root);
   assert.strictEqual(c.ok, true, c.problems.join("; "));
   assert.deepStrictEqual(c.declares, ["scopes", "sends_to"]);
   let said = "";
@@ -127,13 +127,13 @@ test("what spacesheep.yaml declares it may ask for is taken, and left to Spacesh
 test("in a git repo, files git ignores aren't checked: a release is read from the commit", () => {
   const root = write({ ...skill(), ".gitignore": ".DS_Store\n", "my-skill/.DS_Store": "junk" });
   execFileSync("git", ["init", "-q", root]);
-  assert.strictEqual(check(root).ok, true);
+  assert.strictEqual(lint(root).ok, true);
   // Outside git, every file is read, as it would be uploaded.
   fs.rmSync(path.join(root, ".git"), { recursive: true });
-  assert.deepStrictEqual(check(root).problems, ["bad_path: .DS_Store: this kind of file isn't accepted in a skill"]);
+  assert.deepStrictEqual(lint(root).problems, ["bad_path: .DS_Store: this kind of file isn't accepted in a skill"]);
 });
 
-test("`spacesheep skills check` asks the server nothing, and exits 0 or 1", async () => {
+test("`spacesheep skills lint` asks the server nothing, and exits 0 or 1", async () => {
   const asked = [];
   const server = http.createServer((req, res) => { asked.push(req.url); res.writeHead(404).end(); });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -147,8 +147,8 @@ test("`spacesheep skills check` asks the server nothing, and exits 0 or 1", asyn
   });
   try {
     const good = write(skill());
-    assert.strictEqual(await exit(["skills", "check", good]), 0);
-    assert.strictEqual(await exit(["skills", "check", write({ "README.md": "x\n" }), "--json"]), 1);
+    assert.strictEqual(await exit(["skills", "lint", good]), 0);
+    assert.strictEqual(await exit(["skills", "lint", write({ "README.md": "x\n" }), "--json"]), 1);
     assert.deepStrictEqual(asked, []);
     // Every other `skills …` is the server's: it asks for the doors table, not this command.
     assert.strictEqual(await exit(["skills", "add", "owner/name"]), 1);
@@ -161,12 +161,12 @@ test("`spacesheep skills check` asks the server nothing, and exits 0 or 1", asyn
 test("in a git repo, a skill folder git ignores is no second skill: it never enters the commit", () => {
   const root = write({ ...skill(), ...skill("draft"), ".gitignore": "draft/\n" });
   execFileSync("git", ["init", "-q", root]);
-  const c = check(root);
+  const c = lint(root);
   assert.strictEqual(c.ok, true, c.problems.join("; "));
   assert.strictEqual(c.name, "my-skill");
   // Not ignored, it is a second skill.
   fs.rmSync(path.join(root, ".gitignore"));
-  assert.deepStrictEqual(check(root).problems, [SAID.several(["draft", "my-skill"])]);
+  assert.deepStrictEqual(lint(root).problems, [SAID.several(["draft", "my-skill"])]);
 });
 
 test("a symlink is refused as the import refuses it, in git or not, and what it points at is never read", () => {
@@ -177,7 +177,7 @@ test("a symlink is refused as the import refuses it, in git or not, and what it 
   assert.deepStrictEqual(said, [SAID.link("example.txt"), SAID.link("gone.txt")]);
   for (const inGit of [false, true]) {
     if (inGit) execFileSync("git", ["init", "-q", root]);
-    const c = check(root);
+    const c = lint(root);
     assert.deepStrictEqual([c.ok, c.hash, c.problems], [false, null, said], inGit ? "in git" : "outside git");
   }
   let out = "";
@@ -189,5 +189,5 @@ test("a repo inside the skill folder is refused as a submodule, not skipped", ()
   const root = write({ ...skill(), "my-skill/vendor/lib.md": "Vendored.\n" });
   execFileSync("git", ["init", "-q", path.join(root, "my-skill/vendor")]);
   execFileSync("git", ["init", "-q", root]);
-  assert.deepStrictEqual(check(root).problems, ["vendor is a submodule: a skill holds its own files."]);
+  assert.deepStrictEqual(lint(root).problems, ["vendor is a submodule: a skill holds its own files."]);
 });
