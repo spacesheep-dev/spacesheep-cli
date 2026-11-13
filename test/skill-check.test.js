@@ -157,3 +157,37 @@ test("`spacesheep skills check` asks the server nothing, and exits 0 or 1", asyn
     server.close();
   }
 });
+
+test("in a git repo, a skill folder git ignores is no second skill: it never enters the commit", () => {
+  const root = write({ ...skill(), ...skill("draft"), ".gitignore": "draft/\n" });
+  execFileSync("git", ["init", "-q", root]);
+  const c = check(root);
+  assert.strictEqual(c.ok, true, c.problems.join("; "));
+  assert.strictEqual(c.name, "my-skill");
+  // Not ignored, it is a second skill.
+  fs.rmSync(path.join(root, ".gitignore"));
+  assert.deepStrictEqual(check(root).problems, [SAID.several(["draft", "my-skill"])]);
+});
+
+test("a symlink is refused as the import refuses it, in git or not, and what it points at is never read", () => {
+  const root = write({ ...skill(), "shared.txt": "Example text.\n" });
+  fs.symlinkSync("../shared.txt", path.join(root, "my-skill/example.txt"));
+  fs.symlinkSync("../nowhere.txt", path.join(root, "my-skill/gone.txt"));
+  const said = ["example.txt is a symlink: a skill holds its own files.", "gone.txt is a symlink: a skill holds its own files."];
+  assert.deepStrictEqual(said, [SAID.link("example.txt"), SAID.link("gone.txt")]);
+  for (const inGit of [false, true]) {
+    if (inGit) execFileSync("git", ["init", "-q", root]);
+    const c = check(root);
+    assert.deepStrictEqual([c.ok, c.hash, c.problems], [false, null, said], inGit ? "in git" : "outside git");
+  }
+  let out = "";
+  assert.strictEqual(run(root, {}, (s) => { out += s; }), 1);
+  assert.match(out, /can't become a version: 2 problems\n {4}- example\.txt is a symlink: a skill holds its own files\./);
+});
+
+test("a repo inside the skill folder is refused as a submodule, not skipped", () => {
+  const root = write({ ...skill(), "my-skill/vendor/lib.md": "Vendored.\n" });
+  execFileSync("git", ["init", "-q", path.join(root, "my-skill/vendor")]);
+  execFileSync("git", ["init", "-q", root]);
+  assert.deepStrictEqual(check(root).problems, ["vendor is a submodule: a skill holds its own files."]);
+});
