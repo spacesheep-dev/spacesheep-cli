@@ -10,7 +10,7 @@ const path = require("path");
 const conf = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-conf-"));
 process.env.SPACESHEEP_CONFIG_DIR = conf;
 const { deploy, clashWords } = require("../lib/deploy");
-const { savedBase } = require("../lib/bases");
+const { savedBase, saveBase } = require("../lib/bases");
 const { read } = require("../lib/read");
 
 const ORIGIN = "https://mcp.example/mcp";
@@ -263,6 +263,21 @@ test("a newer read of another space into the folder is not this space's base", a
   assert.equal(sent.base_sha, "v2", "sp-1's own last version, not sp-2's v3 read later");
   assert.equal(savedBase({ origin: ORIGIN, space: "@z/other", dir }), "v3");
   assert.equal(savedBase({ origin: ORIGIN, space: "sp-2", dir }), "v3");
+});
+
+test("two saves in one millisecond, or after the clock steps back: the later one is the base", () => {
+  const dir = page({ space: "sp-1" });
+  const names = { origin: ORIGIN, space: ["sp-1", "https://spacesheep.dev/@y/q3"], dir };
+  const real = Date.prototype.toISOString;
+  try {
+    Date.prototype.toISOString = () => "2026-11-13T20:00:00.000Z";
+    saveBase(names, "dep222");
+    saveBase({ origin: ORIGIN, space: "@y/q3", dir }, "read333");
+    assert.equal(savedBase(names), "read333", "a read in the deploy's millisecond");
+    Date.prototype.toISOString = () => "2026-11-13T19:00:00.000Z";
+    saveBase({ origin: ORIGIN, space: "sp-1", dir }, "dep444");
+    assert.equal(savedBase(names), "dep444", "a deploy after the clock stepped back an hour");
+  } finally { Date.prototype.toISOString = real; }
 });
 
 test("a base an older CLI kept under the link as typed is still found", async () => {
