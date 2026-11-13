@@ -3,7 +3,7 @@
 // (shared/skill-format.ts's checkSkillFormat: SKILL.md as the Agent Skills spec reads it,
 // spacesheep.yaml's shape, the folder's bytes and the version hash), built from a commit of
 // the app's repo into one CommonJS file with the yaml parser it uses inside it. The CLI
-// keeps no copy of its own: `spacesheep skills check` runs the code the server runs for
+// keeps no copy of its own: `spacesheep skills lint` runs the code the server runs for
 // the format, at the commit named in the file's header.
 //
 // Only skill-format.ts and skill-files.ts are taken out of the app's repo, so nothing else
@@ -17,7 +17,7 @@
 // The app's repo is --core, else $SPACESHEEP_CORE, else ../spacesheep beside this repo. Its
 // files are read at --rev (default origin/main), never from its working tree, and built
 // with its own esbuild and yaml (node_modules), so this repo needs neither. Run it again
-// after skill-format.ts changes; test/skill-check.test.js fails when the file is stale.
+// after skill-format.ts changes; test/skill-lint.test.js fails when the file is stale.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
