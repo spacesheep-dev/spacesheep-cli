@@ -445,7 +445,7 @@ test("a clash says the live sha, the parts, and how to go on, and saves nothing"
 test("no_base, today's JSON and a door's ErrorInfo alike, gives the way that keeps both in its first line", async () => {
   const today = clashWords({ error: "conflict", reason: "no_base", message: "published by ana@x.com, not by you", server_sha: "srv333" }, "spacesheep deploy .", "sp-1", null, "deploy refused — conflict: published by ana@x.com, not by you");
   const [first, second, ...rest] = today.split("\n  ");
-  assert.equal(first, "this folder has no version of sp-1 to build on, and another session published its live version, so nothing was deployed. To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1");
+  assert.equal(first, "this folder has no version of sp-1 to build on, and its live version was published from elsewhere, so nothing was deployed. To keep both: spacesheep read sp-1 -o <folder>, put your changes in, then spacesheep deploy <folder> --space sp-1");
   assert.equal(second, "To publish yours over the live version, erasing the changes made there: spacesheep deploy . --replace");
   assert.deepEqual(rest, ["deploy refused — conflict: published by ana@x.com, not by you", "live version: srv333"]);
   const dir = page({ space: "sp-1" });
