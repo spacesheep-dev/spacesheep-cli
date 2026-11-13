@@ -213,6 +213,69 @@ test("after read <link> -o, ten deploys in a row build on the last, whichever na
   assert.match(space.files()["index.html"], /<p>A, edit 10<\/p>/);
 });
 
+/** `reader`, on a server whose list_versions names the space's id, as today's does. */
+const named = (space, uuid) => ({ ...reader(space), call: async (n, a) => (n === "list_versions" ? { space: { uuid, title: "Q3" }, ...space.versions() } : reader(space).call(n, a)) });
+const Q3 = "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n";
+
+test("read by link, deploy, someone saves, read again by @handle/slug: the pinned deploy builds on that read", async () => {
+  for (const again of ["@y/q3", "/@y/q3/", "https://spacesheep.dev/@y/q3/", "https://spacesheep.dev/@y/q3?v=1"]) {
+    const space = fakeSpace({ "index.html": Q3 });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-alias-"));
+    const link = "https://spacesheep.dev/@y/q3";
+    await read(reader(space), link, { dir });
+    body(dir, ["A first", "B", "C"]);
+    await run(dir, { space: link }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+    space.edit((t) => { t["index.html"] = t["index.html"].replace("A first", "A server"); });
+    const readHead = space.head;
+    await read(reader(space), again, { dir });
+    body(dir, ["A after read", "B", "C"]);
+    // A stale base (the deploy's v2) clashes on line 2 here, though the edit was made on v3.
+    const { sent, r } = await run(dir, {}, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+    assert.equal(sent.base_sha, readHead, `a deploy uses the version just read through ${again}`);
+    assert.equal(r.merged, undefined);
+    assert.match(space.files()["index.html"], /<p>A after read<\/p>/);
+  }
+});
+
+test("read by link on a server that names the id: a deploy by the id builds on that read", async () => {
+  const space = fakeSpace({ "index.html": Q3 });
+  space.edit((t) => { t["index.html"] = t["index.html"].replace("<p>B</p>", "<p>B, before</p>"); });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-id-"));
+  await read(named(space, "sp-1"), "https://spacesheep.dev/@y/q3", { dir });
+  body(dir, ["A, mine", "B, before", "C"]);
+  const { sent, r } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v2");
+  assert.equal(r.merged, undefined);
+});
+
+test("a newer read of another space into the folder is not this space's base", async () => {
+  const space = fakeSpace({ "index.html": Q3 });
+  const other = fakeSpace({ "index.html": Q3.replace("Q3", "Other") });
+  other.edit((t) => { t["index.html"] += "\n"; });
+  other.edit((t) => { t["index.html"] += "\n"; });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-two-"));
+  await read(reader(space), "https://spacesheep.dev/@y/q3", { dir });
+  body(dir, ["A first", "B", "C"]);
+  await run(dir, { space: "https://spacesheep.dev/@y/q3" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  await read(named(other, "sp-2"), "@z/other", { dir });
+  body(dir, ["A again", "B", "C"]);
+  const { sent } = await run(dir, { space: "sp-1" }, { deploy: (a) => space.deploy(a) }, ORIGIN, space.upload);
+  assert.equal(sent.base_sha, "v2", "sp-1's own last version, not sp-2's v3 read later");
+  assert.equal(savedBase({ origin: ORIGIN, space: "@z/other", dir }), "v3");
+  assert.equal(savedBase({ origin: ORIGIN, space: "sp-2", dir }), "v3");
+});
+
+test("a base an older CLI kept under the link as typed is still found", async () => {
+  const dir = page({ space: "sp-1", url: "https://spacesheep.dev/@y/q3/" });
+  const store = path.join(conf, "bases.json");
+  const all = fs.existsSync(store) ? JSON.parse(fs.readFileSync(store, "utf-8")) : {};
+  all[`${ORIGIN} https://spacesheep.dev/@y/q3/ ${path.resolve(dir)}`] = { sha: "old111", at: "2026-11-01T00:00:00.000Z" };
+  fs.writeFileSync(store, JSON.stringify(all));
+  const { sent } = await run(dir, {}, { deploy: published("new222") });
+  assert.equal(sent.base_sha, "old111");
+  assert.equal(savedBase({ origin: ORIGIN, space: "@y/q3", dir }), "new222");
+});
+
 test("a second writer reads the page, changes it and deploys with no sha: merged with what landed", async () => {
   const space = fakeSpace({ "index.html": "<html><head><title>Q3</title></head><body>\n<p>A</p>\n<p>B</p>\n<p>C</p>\n</body></html>\n" });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-base-read-"));
