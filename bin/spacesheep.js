@@ -77,9 +77,6 @@ const HELP = `
     spacesheep skills lint [folder]        check a skill folder, or a repo holding one, for the format
                                            Spacesheep reads; no sign-in, and the folder never leaves
                                            this machine. --json for CI
-    spacesheep skills pull <skill> [dir] [--version N] [--json]
-                                           write a skill's files to a new or empty folder (./<slug> by
-                                           default) for your agent to follow
     spacesheep tools [name]                every tool the server has, or one tool's arguments
     spacesheep call <tool> [key=value | key:=json ...]
                                            run any of them: \`call screenshot uuid=<space> width:=390\`;
@@ -186,7 +183,7 @@ function parse(argv) {
     if (a === "--json") opts.json = true;
     else if (a === "-h" || a === "--help") opts.help = true;
     else if (a === "-y" || a === "--yes") opts.yes = true;
-    else if (a === "-v" || a === "--version") opts.version = /^\d+$/.test(argv[i + 1] || "") ? argv[++i] : true;   // skills pull --version 2
+    else if (a === "-v" || a === "--version") opts.version = true;
     else if (a === "-o" || a === "--out") opts.out = take();
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
     else if (a === "--tag") opts.tags.push(take());
@@ -495,18 +492,13 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
 // prints today's one line a row (OLD_LINES).
 // Commands that run here before the table is asked for, whatever it says: `skills lint` reads
-// a folder on this machine (in CI as much as at a desk) and never waits on the server; `skills
-// pull` writes files to one, from the table's `skills get` and `installs list` (lib/skill-pull.js). The
+// a folder on this machine (in CI as much as at a desk) and never waits on the server. The
 // rest of `skills …` is the table's, so `skills` isn't one of today's commands: a word that
 // is hides the table's verbs for it behind a cached copy from before they existed.
 const LOCAL = {
   "skills lint": (opts) => {
     if (opts.help) return out("  spacesheep skills lint [folder] [--json]");
     process.exitCode = require("../lib/skill-lint").run(opts._[2], { json: opts.json });
-  },
-  "skills pull": (opts) => {
-    if (opts.help) return out("  spacesheep skills pull <skill> [dir] [--version N] [--json]");
-    return require("../lib/skill-pull").run(opts, newCall, out);
   },
 };
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
@@ -569,17 +561,18 @@ async function door(argv) {
     const verbNext = /^[a-z][a-z-]*$/.test(argv[1] || "");
     table = fetched = await doors.loadTable(probe ? { ...where, timeout: verbNext ? doors.FETCH_TIMEOUT : doors.PROBE_TIMEOUT }
       : commands[word] ? where
-      : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => !!doors.match(t, argv) });
+      : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => doors.canRun(t, argv) });
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
   const didntCome = () => {
     console.error(`\n  ✗ The server's list of commands didn't come: ${trouble.why}, from ${trouble.url}.\n    "${word}" isn't one of this CLI's own commands, so it needs that list. Try again in a moment;\n    \`spacesheep --help\` lists this CLI's own commands.\n`);
     return 1;
   };
-  if (!table) return trouble ? didntCome() : null;
+  // No fresh table, and the copy here can't run this line (an older one: no answer about the new one).
+  if (trouble) return didntCome();
+  if (!table) return null;
   const found = doors.match(table, argv);
   if (!found) {
     if (commands[word]) return null;
-    if (trouble) return didntCome();   // an older copy that doesn't have it: no answer about the new one
     const verbs = doors.nounHelp(table, word);
     if (!verbs) return null;
     process.stdout.write(verbs);
