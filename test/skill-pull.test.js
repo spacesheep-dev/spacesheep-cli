@@ -83,7 +83,7 @@ test("pull refuses a path outside the folder before writing anything, and says t
   await assert.rejects(pull(["@me/nope", dir], stub([])), /No skill by that name or id that you can read\. \(not_found\)/);
 });
 
-test("pull writes only into a new or empty folder: one with files, a link or a file is refused before any file is read", async () => {
+test("pull writes only into a new or empty folder: one with files, a link (with or without a trailing slash) or a file is refused before any file is read", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ss-pull-")), outside = path.join(root, "outside");
   fs.mkdirSync(outside);
   fs.writeFileSync(path.join(outside, "big.js"), "theirs");
@@ -92,13 +92,18 @@ test("pull writes only into a new or empty folder: one with files, a link or a f
   fs.symlinkSync(outside, path.join(full, "assets"));   // a link inside it would carry assets/big.js outside
   fs.symlinkSync(outside, link);
   fs.writeFileSync(file, "x");
-  for (const [dir, why] of [[full, "has files in it"], [link, "is a link"], [file, "is a file"]]) {
+  // A trailing slash makes lstat follow a link: `toEmpty/` would see an empty folder and write through the link.
+  const bare = path.join(root, "bare"), toEmpty = path.join(root, "to-empty");
+  fs.mkdirSync(bare);
+  fs.symlinkSync(bare, toEmpty);
+  for (const [dir, why] of [[full, "has files in it"], [link, "is a link"], [file, "is a file"], [toEmpty, "is a link"], [toEmpty + "/", "is a link"], [toEmpty + "/.", "is a link"]]) {
     const seen = [];
     await assert.rejects(pull(["@me/hello", dir], stub(Object.keys(PARTS), { seen })), { message: `pull writes into a new or empty folder: ${dir} ${why}` });
     assert.ok(reads(seen).every((q) => !q.path), "no file read");
   }
   assert.strictEqual(fs.readFileSync(path.join(outside, "big.js"), "utf8"), "theirs");
   assert.deepStrictEqual(fs.readdirSync(outside), ["big.js"]);
+  assert.deepStrictEqual(fs.readdirSync(bare), [], "nothing written through the link");
   const empty = path.join(root, "empty");
   fs.mkdirSync(empty);
   await pull(["@me/hello", empty], stub(["SKILL.md"]));
