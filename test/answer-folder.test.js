@@ -20,6 +20,9 @@ const TABLE = { services: [{ methods: [{
   inputs: [at("skill", "name"), at("skill_id", "id"), at("view"), at("path"), at("version"), at("offset")],
   answer_folder: { list: "files", list_with: { input: "view", value: "full" }, path: "path", file: "file", text: "text", bytes: "data", offset: "offset", next: "next_offset", served: "served", number: "number", label: "label", pin: "version" },
 }] }] };
+// The same table from a server before answer_folder: GetSkill is there, with no folder to write.
+const { answer_folder: _, ...before } = TABLE.services[0].methods[0];
+const OLD = { services: [{ methods: [before] }] };
 // big.js is "héllo 🐑 " then "wörld": offsets in code points. img.bin is bytes 0-3 then 4-5.
 const PARTS = { "SKILL.md": [["text", "# Hi\n"]], "assets/big.js": [["text", "héllo 🐑 ", 8], ["text", "wörld"]], "img.bin": [["data", Buffer.from([0, 1, 2, 255]).toString("base64"), 4], ["data", Buffer.from([7, 8]).toString("base64")]] };
 const LABELS = { 2: "v1.2.1", 3: "v1.3.0" };   // 4 has none
@@ -40,8 +43,8 @@ function stub(files, { live = () => 2, part = (q) => PARTS[q.path], seen = [] } 
   };
 }
 /** `spacesheep skills get …` through the door: its exit code, what it printed and what it said on stderr. */
-async function get(args, fetchImpl) {
-  const said = [], errs = [], argv = ["skills", "get", ...args], found = doors.match(TABLE, argv);
+async function get(args, fetchImpl, table = TABLE) {
+  const said = [], errs = [], argv = ["skills", "get", ...args], found = doors.match(table, argv);
   const code = await doors.run(found, argv.slice(found.used), { origin: "http://x", key: () => "ss_test", version: "0", fetchImpl, out: (s) => said.push(s), err: (s) => errs.push(s) });
   return { code, said, errs, json: () => JSON.parse(said[0]) };
 }
@@ -136,10 +139,24 @@ test("without -o the call is one request, its answer printed; --help names -o", 
   assert.match(doors.helpFor(doors.match(TABLE, ["skills", "get"])), /-o, --out <folder>\s+write every file to a new or empty folder \(with --path, that file to <file>\)/);
 });
 
-test("end to end: skills get -o reaches GetSkill's own --version, skills pull is gone, and --version is the CLI's", async () => {
+test("-o on a call whose answer is neither a file nor a folder exits 2 before any call; that table can't run the line", async () => {
+  const dir = fresh(), seen = [];
+  const r = await get(["@me/hello", "-o", dir], stub(["SKILL.md"], { seen }), OLD);
+  assert.deepStrictEqual([r.code, r.errs], [2, ["\n  ✗ -o has nothing to write for this call on this server: its answer is neither a file nor a folder\n"]]);
+  assert.equal(seen.length, 0, "no call made");
+  assert.ok(!fs.existsSync(dir), "nothing written");
+  const line = ["skills", "get", "@me/hello", "-o", dir];
+  assert.deepStrictEqual([doors.canRun(OLD, line), doors.canRun(OLD, line.slice(0, 3)), doors.canRun(TABLE, line), doors.canRun(TABLE, ["skills", "pull"])], [false, true, true, false]);
+});
+
+/** The CLI from bin against a server answering GetSkill and serving `table()` as /v1/doors.json. `seen` has GetSkill's
+ *  queries, `doors()` how often the table was asked for, and `cached(t)` puts `t` in the config folder as a copy
+ *  fetched just now and fresh for 10 minutes. */
+async function serve(table = () => TABLE) {
   const seen = [], answer = stub(Object.keys(PARTS), { seen });
+  let doorsAsked = 0;
   const s = http.createServer(async (req, res) => {
-    if (req.url === "/v1/doors.json") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(TABLE)); }
+    if (req.url === "/v1/doors.json") { doorsAsked++; res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(table())); }
     const r = await answer(`http://x${req.url}`);
     res.writeHead(r.status, { "Content-Type": "application/json" });
     res.end(await r.text());
@@ -153,6 +170,16 @@ test("end to end: skills get -o reaches GetSkill's own --version, skills pull is
     p.stderr.on("data", (d) => { err += d; });
     p.on("close", (code) => resolve({ code, out, err }));
   });
+  const cached = (t) => {
+    const file = doors.cachePath(env.SPACESHEEP_CONFIG_DIR, env.SPACESHEEP_ORIGIN);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ origin: env.SPACESHEEP_ORIGIN, etag: '"old"', fetched_at: Date.now(), max_age: 600, table: t }));
+  };
+  return { seen, doors: () => doorsAsked, cli, cached, close: () => s.close() };
+}
+
+test("end to end: skills get -o reaches GetSkill's own --version, skills pull is gone, and --version is the CLI's", async () => {
+  const { seen, cli, close } = await serve();
   try {
     const dir = fresh();
     const r = await cli(["skills", "get", "@me/hello", "-o", dir, "--version", "4"]);
@@ -164,5 +191,31 @@ test("end to end: skills get -o reaches GetSkill's own --version, skills pull is
     assert.equal(pull.code, 2);
     assert.match(pull.out, /spacesheep skills get <skill>/);
     assert.equal((await cli(["--version"])).out, `${require("../package.json").version}\n`);
-  } finally { s.close(); }
+  } finally { close(); }
+});
+
+test("end to end: a cached table from before answer_folder is fetched again for -o, and -o with nothing to write exits 2", async () => {
+  let served = TABLE;
+  const e = await serve(() => served);
+  try {
+    e.cached(OLD);
+    const one = await e.cli(["skills", "get", "@me/hello", "--path", "SKILL.md"]);
+    assert.equal(one.code, 0, one.err);
+    assert.deepStrictEqual([e.doors(), e.seen.length], [0, 1], "without -o the cached copy runs, the table not asked for");
+    const dir = fresh();
+    const r = await e.cli(["skills", "get", "@me/hello", "-o", dir]);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(e.doors(), 1, "the old copy has no folder for -o, so the table is fetched again");
+    assert.ok(r.out.endsWith(`Follow ${path.join(dir, "SKILL.md")} (@me/hello v1.2.1)\n`), r.out);
+    assert.deepStrictEqual(fs.readdirSync(dir).sort(), ["SKILL.md", "assets", "img.bin"]);
+    // A server whose own table has no answer_folder either: refused before any GetSkill call, nothing written.
+    served = OLD;
+    e.cached(OLD);
+    const calls = e.seen.length, none = fresh();
+    const no = await e.cli(["skills", "get", "@me/hello", "-o", none]);
+    assert.deepStrictEqual([no.code, no.out], [2, ""]);
+    assert.match(no.err, /-o has nothing to write for this call on this server/);
+    assert.deepStrictEqual([e.doors(), e.seen.length], [2, calls], "the table asked for again, and no GetSkill call");
+    assert.ok(!fs.existsSync(none), "nothing written");
+  } finally { e.close(); }
 });

@@ -561,17 +561,18 @@ async function door(argv) {
     const verbNext = /^[a-z][a-z-]*$/.test(argv[1] || "");
     table = fetched = await doors.loadTable(probe ? { ...where, timeout: verbNext ? doors.FETCH_TIMEOUT : doors.PROBE_TIMEOUT }
       : commands[word] ? where
-      : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => !!doors.match(t, argv) });
+      : { ...where, timeout: doors.NEED_TIMEOUT, trouble: (t) => { trouble = t; }, can: (t) => doors.canRun(t, argv) });
   } catch (e) { console.error(`\n  ✗ ${e.message}\n`); return 1; }
   const didntCome = () => {
     console.error(`\n  ✗ The server's list of commands didn't come: ${trouble.why}, from ${trouble.url}.\n    "${word}" isn't one of this CLI's own commands, so it needs that list. Try again in a moment;\n    \`spacesheep --help\` lists this CLI's own commands.\n`);
     return 1;
   };
-  if (!table) return trouble ? didntCome() : null;
+  // No fresh table, and the copy here can't run this line (an older one: no answer about the new one).
+  if (trouble) return didntCome();
+  if (!table) return null;
   const found = doors.match(table, argv);
   if (!found) {
     if (commands[word]) return null;
-    if (trouble) return didntCome();   // an older copy that doesn't have it: no answer about the new one
     const verbs = doors.nounHelp(table, word);
     if (!verbs) return null;
     process.stdout.write(verbs);
