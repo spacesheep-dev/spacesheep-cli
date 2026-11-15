@@ -77,6 +77,9 @@ const HELP = `
     spacesheep skills lint [folder]        check a skill folder, or a repo holding one, for the format
                                            Spacesheep reads; no sign-in, and the folder never leaves
                                            this machine. --json for CI
+    spacesheep skills pull <skill> [dir] [--version N] [--json]
+                                           write a skill's files to a new or empty folder (./<slug> by
+                                           default) for your agent to follow
     spacesheep tools [name]                every tool the server has, or one tool's arguments
     spacesheep call <tool> [key=value | key:=json ...]
                                            run any of them: \`call screenshot uuid=<space> width:=390\`;
@@ -183,7 +186,7 @@ function parse(argv) {
     if (a === "--json") opts.json = true;
     else if (a === "-h" || a === "--help") opts.help = true;
     else if (a === "-y" || a === "--yes") opts.yes = true;
-    else if (a === "-v" || a === "--version") opts.version = true;
+    else if (a === "-v" || a === "--version") opts.version = /^\d+$/.test(argv[i + 1] || "") ? argv[++i] : true;   // skills pull --version 2
     else if (a === "-o" || a === "--out") opts.out = take();
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
     else if (a === "--tag") opts.tags.push(take());
@@ -492,13 +495,18 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // unpins the folder. `list` and `versions <space>` aren't here: the door runs them, and
 // prints today's one line a row (OLD_LINES).
 // Commands that run here before the table is asked for, whatever it says: `skills lint` reads
-// a folder on this machine (in CI as much as at a desk) and never waits on the server. The
+// a folder on this machine (in CI as much as at a desk) and never waits on the server; `skills
+// pull` writes files to one, from the table's `skills get` and `installs list` (lib/skill-pull.js). The
 // rest of `skills …` is the table's, so `skills` isn't one of today's commands: a word that
 // is hides the table's verbs for it behind a cached copy from before they existed.
 const LOCAL = {
   "skills lint": (opts) => {
     if (opts.help) return out("  spacesheep skills lint [folder] [--json]");
     process.exitCode = require("../lib/skill-lint").run(opts._[2], { json: opts.json });
+  },
+  "skills pull": (opts) => {
+    if (opts.help) return out("  spacesheep skills pull <skill> [dir] [--version N] [--json]");
+    return require("../lib/skill-pull").run(opts, newCall, out);
   },
 };
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
@@ -593,7 +601,7 @@ async function door(argv) {
 (async () => {
   const local = LOCAL[process.argv.slice(2, 4).join(" ")];
   if (local) {
-    try { return local(parse(process.argv.slice(2))); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(1); }
+    try { return await local(parse(process.argv.slice(2))); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(1); }
   }
   const code = await door(process.argv.slice(2));
   if (code !== null) { process.exitCode = code; return; }
