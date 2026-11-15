@@ -38,11 +38,13 @@ test("pull writes each file whole, its parts joined, and says where to start", a
   fs.writeFileSync(path.join(dir, "keep.txt"), "mine");
   const seen = [];
   const [said] = await pull(["@me/hello", dir], stub(Object.keys(PARTS), seen));
-  assert.deepStrictEqual(said, { dir, skill: "@me/hello", version: 3, files: [{ path: "SKILL.md", bytes: 5 }, { path: "assets/big.js", bytes: 18 }, { path: "img.bin", bytes: 6 }] });
+  assert.deepStrictEqual(said, { dir, skill: "@me/hello", version: null, files: [{ path: "SKILL.md", bytes: 5 }, { path: "assets/big.js", bytes: 18 }, { path: "img.bin", bytes: 6 }] });
   assert.strictEqual(fs.readFileSync(path.join(dir, "assets/big.js"), "utf8"), "héllo 🐑 wörld");
   assert.deepStrictEqual([...fs.readFileSync(path.join(dir, "img.bin"))], [0, 1, 2, 255, 7, 8]);
   assert.strictEqual(fs.readFileSync(path.join(dir, "keep.txt"), "utf8"), "mine");
   assert.ok(seen.every((q) => q.version === undefined), "the server picks the version");
+  const unnamed = await pull(["@me/hello", dir], stub(["SKILL.md"]), {});
+  assert.strictEqual(unnamed.at(-1), `Follow ${path.join(dir, "SKILL.md")} (@me/hello)`, "no version named when none was asked for");
   const named = [];
   const lines = await pull(["@me/hello", dir], stub(["SKILL.md"], named), { version: "2" });
   assert.deepStrictEqual(lines, ["  ✓ SKILL.md  5 bytes", `Follow ${path.join(dir, "SKILL.md")} (@me/hello v2)`]);
