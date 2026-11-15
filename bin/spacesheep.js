@@ -78,8 +78,8 @@ const HELP = `
                                            Spacesheep reads; no sign-in, and the folder never leaves
                                            this machine. --json for CI
     spacesheep skills pull <skill> [dir] [--version N] [--json]
-                                           write a skill's files to a folder (./<slug> by default) for your
-                                           agent to follow; files already there are overwritten
+                                           write a skill's files to a new or empty folder (./<slug> by
+                                           default) for your agent to follow
     spacesheep tools [name]                every tool the server has, or one tool's arguments
     spacesheep call <tool> [key=value | key:=json ...]
                                            run any of them: \`call screenshot uuid=<space> width:=390\`;
@@ -496,7 +496,7 @@ const SAME = new Set(["sessions list", "sessions get", "sessions export"]);
 // prints today's one line a row (OLD_LINES).
 // Commands that run here before the table is asked for, whatever it says: `skills lint` reads
 // a folder on this machine (in CI as much as at a desk) and never waits on the server; `skills
-// pull` writes files to one, from the table's `skills get` (lib/skill-pull.js). The
+// pull` writes files to one, from the table's `skills get` and `installs list` (lib/skill-pull.js). The
 // rest of `skills …` is the table's, so `skills` isn't one of today's commands: a word that
 // is hides the table's verbs for it behind a cached copy from before they existed.
 const LOCAL = {
@@ -506,7 +506,7 @@ const LOCAL = {
   },
   "skills pull": (opts) => {
     if (opts.help) return out("  spacesheep skills pull <skill> [dir] [--version N] [--json]");
-    return require("../lib/skill-pull").run(opts, (inputs) => newCall("skills get", inputs), out);
+    return require("../lib/skill-pull").run(opts, newCall, out);
   },
 };
 const HELD = new Set(["talk listen", "sessions export", "deploy", "read", "share", "delete"]);
