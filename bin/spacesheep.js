@@ -155,6 +155,7 @@ const HELP = `
     --team-access <view|edit>   what the team may do on a new space; default view
     --no-team                publish personal, whatever a .spacesheep.json names
     --org <slug>             publish under an organization with its own address (not a Team: use --team)
+    --skill <@handle/slug>   the skill this page was made with, so the skill counts it
     -m, --message <text>     version name shown in the space's history
     --base <sha>             the version your files are built on, or the start of its sha: anything
                              published since is merged in (default: what this folder last published
@@ -293,6 +294,7 @@ const commands = {
     // Every push says who can read it because of where it lives, team or personal.
     if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
     if (r.team_missed) log(`  ! ${r.team_missed}`);
+    if (r.skill_missed) log(`  ! ${r.skill_missed}`);
     // Built on an older version: what landed since was merged in, line by line.
     if (r.merged) {
       const m = r.merged, merged = m.merged || [], kept = m.kept || [];
