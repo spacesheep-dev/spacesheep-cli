@@ -444,7 +444,8 @@ test("end to end: spacesheep <noun> <verb> against a server that serves the tabl
     // A message that is one of its violations isn't printed twice; the others still are.
     const one = await cli(["spaces", "get", "@james/plan"], env);
     assert.equal(one.code, 1);
-    assert.equal(one.err, "\n  ✗ size: takes a whole number (invalid)\n    path: is required\n\n");
+    // A refusal says what to do instead of running it again (lib/refusals.js).
+    assert.equal(one.err, "\n  ✗ size: takes a whole number (invalid)\n    path: is required\n  What to do: change what the message names; the same command again is refused the same way.\n\n");
 
     const before = seen.length;
     const wrong = await cli(["spaces", "get", "--nope"], env);
@@ -979,8 +980,8 @@ test("end to end: a tool's refusal prints its sentence, in either server's words
   try {
     // ErrorInfo as the MCP door sends it (pretty-printed JSON), with what each violation adds.
     assert.equal(await said(JSON.stringify({ code: "not_found", message: "No such space.", violations: [] }, null, 2)), "✗ No such space.");
-    assert.equal(await said(JSON.stringify({ code: "invalid", message: "Check the request.", violations: [{ field: "path", message: "at most 300 characters" }] }, null, 2)), "✗ Check the request.\n    path: at most 300 characters");
-    assert.equal(await said(JSON.stringify({ code: "invalid", message: "path: at most 300 characters", violations: [{ field: "path", message: "at most 300 characters" }] })), "✗ path: at most 300 characters");
+    assert.equal(await said(JSON.stringify({ code: "invalid", message: "Check the request.", violations: [{ field: "path", message: "at most 300 characters" }] }, null, 2)), "✗ Check the request.\n    path: at most 300 characters\n  What to do: change what the message names; the same command again is refused the same way.");
+    assert.equal(await said(JSON.stringify({ code: "invalid", message: "path: at most 300 characters", violations: [{ field: "path", message: "at most 300 characters" }] })), "✗ path: at most 300 characters\n  What to do: change what the message names; the same command again is refused the same way.");
     // Today's tools: {error}, or plain words.
     assert.equal(await said('{"error":"Space not found."}'), "✗ Space not found.");
     assert.equal(await said("Space not found."), "✗ Space not found.");
