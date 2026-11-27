@@ -41,6 +41,14 @@ const os = require("os");
 const { deviceLogin, connectWithKey, redeemCode, agentClient } = require("../lib/login");
 const { deploy } = require("../lib/deploy");
 const { updateNotice, selfUpdate } = require("../lib/update");
+const { refusalOf, EXIT_STOP_RETRYING } = require("../lib/refusals");
+/** `call`'s refusal, from the tool's first text block. */
+function callRefusal(result) {
+  const text = (result.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  let v = text;
+  try { v = JSON.parse(text); } catch {}
+  return refusalOf(v);
+}
 
 const HELP = `
   spacesheep ${pkg.version} — publish web pages to spacesheep.dev from a terminal or CI
@@ -159,8 +167,16 @@ const HELP = `
     -m, --message <text>     version name shown in the space's history
     --base <sha>             the version your files are built on, or the start of its sha: anything
                              published since is merged in (default: what this folder last published
-                             or read on this machine)
+                             or read on this machine, or its .spacesheep.json's deployed_sha)
+    --base latest            the live version itself: nothing is merged, your files replace it
+                             (the same as --replace)
     --replace                publish over the live version on purpose, erasing changes made there
+                             A folder with no base, onto a space someone else published last, stops
+                             before uploading (or says the same files are already live).
+
+  Exit codes
+    0 done   1 failed or refused   2 wrong command line   3 not signed in
+    4 stop_retrying: the server refuses this call until something changes — don't run it again
     --json                   print the server's JSON result
 
   Auth
@@ -290,6 +306,12 @@ const commands = {
   async deploy(opts) {
     const r = await deploy(client(), opts._[0], { ...opts, via: process.env.GITHUB_ACTIONS ? "GitHub Actions" : "CLI" }, log);
     if (opts.json) return out(r);
+    if (r.unchanged) {
+      log(`\n  = Already live: these files are the live version of ${r.url || r.uuid} (${String(r.sha).slice(0, 12)}, published by ${r.who}). Nothing was deployed; this folder now builds on that version.`);
+      out(r.url || r.uuid);
+      if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `url=${r.url || ""}\nuuid=${r.uuid}\nsha=${r.sha}\n`);
+      return;
+    }
     log(`\n  ✓ ${r.is_update ? "Updated" : "Created"} ${r.url}`);
     // Every push says who can read it because of where it lives, team or personal.
     if (r.lives_in) log(`  ⌂ Lives in ${r.lives_in}${r.team_from && !r.is_update ? ` (team from ${r.team_from === "--team" ? "--team" : path.relative(process.cwd(), r.team_from) || ".spacesheep.json"})` : ""}`);
@@ -300,7 +322,7 @@ const commands = {
       const m = r.merged, merged = m.merged || [], kept = m.kept || [];
       log(`  ⇄ Merged with what was published since your version (${String(m.base_sha || "").slice(0, 12)} → ${String(m.server_sha || "").slice(0, 12)}): ${merged.length} file(s) merged${merged.length ? ` (${merged.slice(0, 5).join(", ")}${merged.length > 5 ? ", …" : ""})` : ""}, ${kept.length} kept as they are on the server. Read the page back before saying what it says. This folder doesn't have the server's part, so the next deploy from it merges that in again (spacesheep read ${r.uuid || "<space>"} -o <folder> brings it here).`);
     }
-    if (r.replaced) log(`  ! Replaced the live version ${String(r.replaced).slice(0, 12)} on purpose (--replace).`);
+    if (r.replaced) log(`  ! Replaced the live version ${String(r.replaced).slice(0, 12)} on purpose (${r.base_latest ? "--base latest" : "--replace"}).`);
     if (r.team_unchanged) log(`  ! ${r.team_from === "--team" ? "--team names" : `${path.relative(process.cwd(), r.team_from || "") || ".spacesheep.json"} names`} a team this space isn't in. A deploy never moves a live space, so nothing moved: move it from the space's Share → Lives in, or check you are publishing the page you mean.`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
@@ -379,9 +401,10 @@ const commands = {
     catch (e) { if (/not found|unknown tool/i.test(e.message)) e.message += " — `spacesheep tools` lists the tools"; throw e; }
     const shown = t.render(name, result, opts);
     if (opts.json) out(shown.json);
-    else if (result.isError) { const e = new Error(shown.text || `${name} failed`); e.code = "ETOOL"; throw e; }
-    else if (shown.text) out(shown.text);
-    if (result.isError) process.exitCode = 1;
+    const refusal = result.isError ? callRefusal(result) : null;
+    if (opts.json) { if (result.isError) process.exitCode = refusal && refusal.code === "stop_retrying" ? EXIT_STOP_RETRYING : 1; return; }
+    if (result.isError) { const e = new Error(shown.text || `${name} failed`); e.code = "ETOOL"; if (refusal) e.refusal = refusal; throw e; }
+    if (shown.text) out(shown.text);
   },
   async feedback(opts) {
     const args = require("../lib/inspection").feedbackArgs(opts);
@@ -616,7 +639,10 @@ async function door(argv) {
     await commands[cmd](opts);
     if (!opts.json && cmd !== "update") { const n = await updateNotice(); if (n) log(`\n${n}`); }
   } catch (e) {
-    console.error(`\n  ✗ ${e.message}\n`);
-    process.exit(e.code === "EAUTH" ? 3 : 1);
+    // A refusal is never run again here: its words, the one line on what to do, and an
+    // exit code of its own for stop_retrying (lib/refusals.js).
+    const { errorWords, exitCodeFor } = require("../lib/refusals");
+    console.error(`\n  ✗ ${errorWords(e, { space: opts.space || (["read", "versions", "share", "delete"].includes(cmd) ? opts._[0] : undefined) })}\n`);
+    process.exit(exitCodeFor(e));
   }
 })();
