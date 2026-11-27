@@ -29,7 +29,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const OUT = join(here, "..", "lib", "skill-check.gen.js");
 /** The only files of the app's repo the bundle may hold. */
 export const SOURCES = ["shared/skill-format.ts", "shared/skill-files.ts"];
-const ENTRY = `export { checkSkillFormat, DECLARED_KEYS, SKILL_FILE_NAMES, SKILL_FORMAT_LIMITS } from "./shared/skill-format";
+const ENTRY = `export { changelogWarnings, checkSkillFormat, DECLARED_KEYS, SKILL_FILE_NAMES, SKILL_FORMAT_LIMITS } from "./shared/skill-format";
 `;
 
 /** Where the app's repo is: --core, $SPACESHEEP_CORE, or ../spacesheep beside this repo. */

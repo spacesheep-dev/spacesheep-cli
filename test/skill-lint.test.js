@@ -92,6 +92,25 @@ test("a repo: the one top-level skill folder is checked, and the repo's own file
   assert.strictEqual(c.hash, lint(path.join(root, "my-skill")).hash);
 });
 
+test("the repo's CHANGELOG.md is held to Keep a Changelog 1.1, with its tags: warnings, never a refusal", () => {
+  const good = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-11-27\n\n### Added\n\n- The first release.\n\n[1.0.0]: https://example.com\n";
+  const root = write({ ...skill(), "CHANGELOG.md": good });
+  const git = (...a) => execFileSync("git", ["-C", root, ...a], { stdio: "ignore" });
+  execFileSync("git", ["init", "-q", root]);
+  git("add", "-A");
+  git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "one");
+  git("tag", "v1.0.0");
+  assert.deepStrictEqual(lint(root).warnings.filter((w) => w.startsWith("CHANGELOG.md")), []);
+  git("tag", "v1.1.0");
+  fs.appendFileSync(path.join(root, "CHANGELOG.md"), "\n## v2.0.0\n- x\n");
+  const c = lint(root);
+  assert.strictEqual(c.ok, true);
+  assert.deepStrictEqual(c.warnings.filter((w) => w.startsWith("CHANGELOG.md")), [
+    'CHANGELOG.md: "## v2.0.0" isn\'t a release heading: write ## [X.Y.Z] - YYYY-MM-DD',
+    "CHANGELOG.md: the tag v1.1.0 has no ## [1.1.0] section",
+  ]);
+});
+
 test("the three refusals are the import's words, and refuse", () => {
   const none = lint(write({ "README.md": "# Nothing\n", "docs/a.md": "a\n" }));
   assert.deepStrictEqual([none.ok, none.problems], [false, [SAID.none]]);
